@@ -140,18 +140,34 @@ def mock_supabase_client(monkeypatch):
         def table(self, name):
             return MockTable()
     
+    class MockSuccessResponse:
+        def __init__(self):
+            self.error = None
+    
     class MockAuthClient:
-        async def sign_up(self, credentials):
+        def sign_up(self, credentials):
             return MockAuthResponse(success=True)
         
-        async def sign_in_with_password(self, credentials):
+        def sign_in_with_password(self, credentials):
             return MockAuthResponse(success=True)
         
-        async def sign_out(self):
-            return {"error": None}
+        def sign_out(self):
+            return MockSuccessResponse()
         
-        async def get_user(self, token):
+        def get_user(self):
             return MockUser()
+        
+        def set_session(self, access_token, refresh_token):
+            pass
+        
+        def update_user(self, data):
+            return MockUser()
+        
+        def reset_password_email(self, email):
+            pass
+        
+        def refresh_session(self, refresh_token):
+            return MockAuthResponse(success=True)
     
     class MockAuthResponse:
         def __init__(self, success=True):
@@ -203,11 +219,6 @@ def mock_supabase_client(monkeypatch):
         
         def execute(self):
             return MockResponse(self._data)
-    
-    class MockResponse:
-        def __init__(self, data=None):
-            self.data = data if data is not None else []
-            self.error = None
     
     def mock_get_supabase():
         return MockSupabaseClient()
