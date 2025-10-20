@@ -27,31 +27,25 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  # Backend API
+  # Backend API (now using Supabase)
   backend:
     build: ./backend
     container_name: chess-insight-backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_USER=chessai
-      - POSTGRES_PASSWORD=chessai
-      - POSTGRES_DB=chessai
-      - POSTGRES_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - STOCKFISH_PATH=/usr/games/stockfish
       - LOG_LEVEL=INFO
-      - SECRET_KEY=your-secret-key-here-change-in-production
     volumes:
       - ./backend:/app
       - backend_uploads:/app/uploads
       - backend_reports:/app/reports
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
     restart: unless-stopped
