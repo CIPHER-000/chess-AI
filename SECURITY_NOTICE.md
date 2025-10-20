@@ -1,10 +1,10 @@
-# 🔐 SECURITY NOTICE - ACTION REQUIRED
+# 🔐 SECURITY NOTICE
 
-## ⚠️ Critical Security Issue Fixed
+## ✅ Security Issue RESOLVED
 
 **Date**: 2025-10-20  
 **Severity**: HIGH  
-**Status**: PARTIALLY RESOLVED
+**Status**: ✅ RESOLVED (Key rotated by user)
 
 ### Issue Identified
 The OpenAI API key was **hardcoded and exposed** in version control at:
@@ -15,31 +15,32 @@ The OpenAI API key was **hardcoded and exposed** in version control at:
 ✅ Updated to use environment variable: `${OPENAI_API_KEY}`  
 ✅ Added `OPENAI_API_KEY` to `.env.example`  
 
-### REQUIRED ACTION BY YOU
+### ✅ Actions Completed
 
-**🚨 YOU MUST ROTATE YOUR API KEY IMMEDIATELY 🚨**
+1. **API Key Rotated:**
+   - Exposed key has been deleted and rotated by user
+   - New key secured in environment variables
 
-1. **Go to OpenAI Platform:**
-   - Visit: https://platform.openai.com/api-keys
-   - Locate the key starting with `sk-proj-w3nSFuFg5yeFMjzB3ii...`
-   - Click "Revoke" to deactivate it immediately
-
-2. **Generate New Key:**
-   - Create a new API key in the OpenAI dashboard
-   - Copy the new key securely
+2. **OpenRouter Integration Added:**
+   - Free tier OpenRouter support for development
+   - Reduces costs during testing and development
+   - See `backend/app/core/ai_client.py` for abstraction layer
 
 3. **Update Local Environment:**
    ```bash
    # Create .env file (if it doesn't exist)
    cp .env.example .env
    
-   # Edit .env and add your NEW key
-   OPENAI_API_KEY=sk-proj-YOUR_NEW_KEY_HERE
+   # Add your keys
+   OPENROUTER_API_KEY=your-openrouter-key-here  # For development (free)
+   OPENAI_API_KEY=your-openai-key-here          # For production (optional)
+   MODEL_PROVIDER=openrouter                    # Use OpenRouter by default
    ```
 
-4. **Verify MCP Configuration:**
-   - The GPT-5 MCP server will now read from environment variables
-   - Restart Windsurf IDE after updating `.env`
+4. **Get OpenRouter Key (Free):**
+   - Visit: https://openrouter.ai/keys
+   - Sign up and generate free API key
+   - Free models available: `google/gemma-2-9b-it:free`, `meta-llama/llama-3.1-8b-instruct:free`
 
 ### Why This Matters
 Exposed API keys can be:

@@ -4,16 +4,24 @@
 
 ---
 
-## 🔥 Critical First Step
+## ✅ Security Update Complete
 
-### Rotate Your OpenAI API Key (5 min)
+### OpenAI API Key Status
 
-Your API key was exposed in git. **You must rotate it immediately:**
+✅ **RESOLVED**: API key has been rotated and secured.
 
-1. Visit: https://platform.openai.com/api-keys
-2. Revoke key: `sk-proj-w3nSFuFg5yeFMjzB3ii...`
-3. Generate new key
-4. Save it for Step 3 below
+### 🆓 OpenRouter Setup (Recommended for Development)
+
+For cost-effective development, we've integrated **OpenRouter** with free tier models:
+
+1. Visit: https://openrouter.ai/keys
+2. Sign up and generate free API key
+3. Save it for Step 3 below
+
+**Free Models Available:**
+- `google/gemma-2-9b-it:free`
+- `meta-llama/llama-3.1-8b-instruct:free`
+- `mistralai/mistral-7b-instruct:free`
 
 ---
 
@@ -57,7 +65,9 @@ cp .env.example .env
 # 2. SUPABASE_ANON_KEY (from Supabase → Settings → API)
 # 3. SUPABASE_SERVICE_ROLE_KEY (from Supabase → Settings → API)
 # 4. SUPABASE_DB_PASSWORD (from Supabase → Settings → Database)
-# 5. OPENAI_API_KEY (your NEW rotated key)
+# 5. OPENROUTER_API_KEY (your OpenRouter key - FREE)
+# 6. MODEL_PROVIDER=openrouter (use free models for dev)
+# 7. OPENAI_API_KEY (optional - for production only)
 ```
 
 ---
