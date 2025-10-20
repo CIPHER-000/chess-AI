@@ -1,0 +1,87 @@
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: chess-insight-postgres
+    env: python
+    plan: free
+    region: oregon
+    databases:
+      - name: chess-insight-db
+        databaseName: chessai
+        user: chessai
+
+  # Redis Cache
+  - type: redis
+    name: chess-insight-redis
+    plan: free
+    region: oregon
+
+  # Backend API Service
+  - type: web
+    name: chess-insight-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+      python -m alembic upgrade head
+    startCommand: |
+      cd backend
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: POSTGRES_SERVER
+        fromDatabase:
+          name: chess-insight-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: chess-insight-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: chess-insight-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: chess-insight-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: chess-insight-db
+          property: database
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: chess-insight-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: chess-insight-redis
+          property: port
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CHESSCOM_API_BASE_URL
+        value: https://api.chess.com/pub
+      - key: CHESSCOM_API_RATE_LIMIT
+        value: 100
+      - key: MAX_GAMES_PER_ANALYSIS
+        value: 50
+      - key: STOCKFISH_PATH
+        value: /usr/games/stockfish
+      - key: STOCKFISH_DEPTH
+        value: 15
+      - key: STOCKFISH_TIME
+        value: 1.0
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: REPORTS_DIR
+        value: /tmp/reports
+      - key: ANALYSIS_CACHE_EXPIRE_HOURS
+        value: 24
+    healthCheckPath: /api/v1/health

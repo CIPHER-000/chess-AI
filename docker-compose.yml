@@ -1,0 +1,108 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: chess-insight-postgres
+    environment:
+      POSTGRES_USER: chessai
+      POSTGRES_PASSWORD: chessai
+      POSTGRES_DB: chessai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chessai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: chess-insight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: chess-insight-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=chessai
+      - POSTGRES_PASSWORD=chessai
+      - POSTGRES_DB=chessai
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - STOCKFISH_PATH=/usr/games/stockfish
+      - LOG_LEVEL=INFO
+      - SECRET_KEY=your-secret-key-here-change-in-production
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+      - backend_reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # Frontend (when ready)
+  frontend:
+    build: ./frontend
+    container_name: chess-insight-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    profiles: ["frontend"]  # Optional service, enable with --profile frontend
+
+  # Celery Worker (for background tasks)
+  celery-worker:
+    build: ./backend
+    container_name: chess-insight-celery
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=chessai
+      - POSTGRES_PASSWORD=chessai
+      - POSTGRES_DB=chessai
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - STOCKFISH_PATH=/usr/games/stockfish
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    profiles: ["celery"]  # Optional service for background processing
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+  backend_reports:
+
+networks:
+  default:
+    name: chess-insight-network
