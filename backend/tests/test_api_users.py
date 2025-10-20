@@ -1,6 +1,7 @@
 """Tests for user API endpoints."""
 import pytest
 from fastapi import status
+from unittest.mock import patch, AsyncMock
 
 
 @pytest.mark.api

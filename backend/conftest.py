@@ -2,20 +2,24 @@
 import os
 import pytest
 from typing import Generator
+import asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from unittest.mock import Mock, AsyncMock, MagicMock
+
+from app.main import app
+from app.core.database import Base, get_db
+from app.models.user import User
+from app.models.game import Game
+from app.models.insights import UserInsight
 
 # Set test environment
 os.environ["TESTING"] = "1"
 os.environ["SUPABASE_URL"] = "https://test.supabase.co"
 os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
-
-from app.main import app
-from app.core.database import Base, get_db
-
 
 # Test database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -137,41 +141,52 @@ def mock_supabase_client(monkeypatch):
             return MockTable()
     
     class MockAuthClient:
-        def sign_up(self, credentials):
-            return MockAuthResponse()
+        async def sign_up(self, credentials):
+            return MockAuthResponse(success=True)
         
-        def sign_in_with_password(self, credentials):
-            return MockAuthResponse()
+        async def sign_in_with_password(self, credentials):
+            return MockAuthResponse(success=True)
         
-        def sign_out(self):
-            pass
+        async def sign_out(self):
+            return {"error": None}
         
-        def get_user(self):
+        async def get_user(self, token):
             return MockUser()
     
     class MockAuthResponse:
-        def __init__(self):
-            self.user = MockUser()
-            self.session = MockSession()
+        def __init__(self, success=True):
+            self.user = MockUser() if success else None
+            self.session = MockSession() if success else None
+            self.error = None if success else {"message": "Error"}
     
     class MockUser:
         def __init__(self):
-            self.id = "test-user-id"
+            self.id = "test-user-id-123"
             self.email = "test@example.com"
+            self.created_at = "2024-01-01T00:00:00Z"
         
         def dict(self):
-            return {"id": self.id, "email": self.email}
+            return {
+                "id": self.id,
+                "email": self.email,
+                "created_at": self.created_at
+            }
     
     class MockSession:
         def __init__(self):
-            self.access_token = "test-access-token"
-            self.refresh_token = "test-refresh-token"
+            self.access_token = "test-access-token-abc123"
+            self.refresh_token = "test-refresh-token-xyz789"
+            self.expires_at = "2024-12-31T23:59:59Z"
     
     class MockTable:
+        def __init__(self):
+            self._data = []
+        
         def select(self, *args):
             return self
         
         def insert(self, data):
+            self._data.append(data)
             return self
         
         def update(self, data):
@@ -183,17 +198,28 @@ def mock_supabase_client(monkeypatch):
         def eq(self, column, value):
             return self
         
+        def single(self):
+            return self
+        
         def execute(self):
-            return MockResponse()
+            return MockResponse(self._data)
     
     class MockResponse:
-        def __init__(self):
-            self.data = []
+        def __init__(self, data=None):
+            self.data = data if data is not None else []
+            self.error = None
     
     def mock_get_supabase():
         return MockSupabaseClient()
     
+    def mock_get_supabase_admin():
+        return MockSupabaseClient()
+    
     monkeypatch.setattr("app.core.supabase_client.get_supabase", mock_get_supabase)
+    monkeypatch.setattr("app.core.supabase_client.get_supabase_admin", mock_get_supabase_admin)
+    monkeypatch.setattr("app.services.auth_service.get_supabase", mock_get_supabase)
+    monkeypatch.setattr("app.services.auth_service.get_supabase_admin", mock_get_supabase_admin)
+    
     return MockSupabaseClient()
 
 

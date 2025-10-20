@@ -2,7 +2,7 @@
 import os
 from typing import Optional
 from supabase import create_client, Client
-from gotrue import SyncGoTrueClient
+from supabase_auth import SyncGoTrueClient
 from loguru import logger
 
 from .config import settings
