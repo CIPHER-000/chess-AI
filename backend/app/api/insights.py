@@ -336,13 +336,24 @@ async def get_insight(insight_id: int, db: Session = Depends(get_db)):
 async def get_recommendations(user_id: int, db: Session = Depends(get_db)):
     """Get current recommendations for a user."""
     
+    # Verify user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     # Get latest insight
     insight = db.query(UserInsight).filter(
         UserInsight.user_id == user_id
-    ).order_by(UserInsight.created_at.desc()).first()
+    ).order_by(UserInsight.period_end.desc()).first()
     
+    # Return empty recommendations if no insights yet
     if not insight:
-        raise HTTPException(status_code=404, detail="No insights found. Generate insights first.")
+        return {
+            "recommendations": [],
+            "focus_areas": [],
+            "period": None,
+            "message": "No insights available yet. Analyze games to get recommendations."
+        }
     
     return {
         "recommendations": insight.recommendations or [],

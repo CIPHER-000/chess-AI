@@ -2,7 +2,6 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urljoin
 
 import httpx
 from loguru import logger
@@ -24,10 +23,12 @@ class ChessComAPI:
         self.last_request_time = 0.0
         
         # HTTP client configuration
+        # Chess.com requires User-Agent with contact info (new API requirement)
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(30.0),
+            follow_redirects=True,  # Follow 301 redirects for case normalization
             headers={
-                "User-Agent": f"{settings.PROJECT_NAME}/{settings.VERSION}",
+                "User-Agent": f"{settings.PROJECT_NAME}/{settings.VERSION} (contact: api@chessinsight.ai)",
                 "Accept": "application/json"
             }
         )
@@ -43,29 +44,62 @@ class ChessComAPI:
         
         self.last_request_time = asyncio.get_event_loop().time()
         
-        url = urljoin(self.base_url, endpoint)
+        # Build URL - ensure proper path joining
+        # endpoint starts with / (e.g., "/player/username")
+        # base_url is "https://api.chess.com/pub"
+        url = self.base_url + endpoint
         request_headers = headers or {}
         
         try:
             logger.debug(f"Making request to {url}")
             response = await self.client.get(url, headers=request_headers)
+            
+            # Chess.com returns 301 for case normalization - client follows automatically
+            # But we should log if redirected
+            if len(response.history) > 0:
+                logger.debug(f"Followed redirect: {response.history[0].url} -> {response.url}")
+            
             response.raise_for_status()
             
             # Return data and response headers for caching
             return response.json(), dict(response.headers)
             
         except httpx.HTTPStatusError as e:
+            # Parse error response for better error messages
+            try:
+                error_data = e.response.json()
+                error_message = error_data.get("message", "Unknown error")
+            except:
+                error_message = e.response.text[:200]
+            
             if e.response.status_code == 404:
-                raise ChessComAPIError(f"User or resource not found: {endpoint}")
+                # User not found (or endpoint doesn't exist)
+                raise ChessComAPIError(f"Not found: {error_message}")
+            elif e.response.status_code == 410:
+                # Permanently removed (e.g., banned/deleted account)
+                raise ChessComAPIError(f"Resource permanently unavailable: {error_message}")
             elif e.response.status_code == 429:
-                raise ChessComAPIError("Rate limit exceeded")
+                # Rate limit exceeded
+                raise ChessComAPIError(f"Rate limit exceeded. Please try again later.")
             else:
-                raise ChessComAPIError(f"API request failed: {e.response.status_code}")
+                raise ChessComAPIError(f"API error ({e.response.status_code}): {error_message}")
         except httpx.RequestError as e:
-            raise ChessComAPIError(f"Request error: {str(e)}")
+            raise ChessComAPIError(f"Network error: {str(e)}")
     
     async def get_player_profile(self, username: str) -> Dict:
-        """Get player profile information."""
+        """Get player profile information.
+        
+        Args:
+            username: Chess.com username (case-insensitive, will be normalized)
+            
+        Returns:
+            Dict containing player profile data
+            
+        Raises:
+            ChessComAPIError: If user not found or API error
+        """
+        # Chess.com API requires lowercase usernames
+        # Mixed case will return 301 redirect, which client follows automatically
         endpoint = f"/player/{username.lower()}"
         data, headers = await self._make_request(endpoint)
         return data
