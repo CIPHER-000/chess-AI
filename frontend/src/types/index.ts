@@ -5,7 +5,24 @@ export interface User {
   display_name?: string;
   email?: string;
   is_active: boolean;
+  
+  // Connection and authentication
+  connection_type?: string;  // "username_only", "oauth", "api_key"
+  is_chesscom_connected?: boolean;
+  connection_status?: string;  // Property from backend: "Public Data Only", "Authenticated", etc.
+  can_access_private_data?: boolean;  // Property from backend
+  
+  // Chess.com data
+  chesscom_profile?: Record<string, any>;
   current_ratings?: Record<string, any>;
+  
+  // Preferences
+  analysis_preferences?: Record<string, any>;
+  notification_preferences?: Record<string, any>;
+  
+  // Metadata
+  created_at?: string;
+  updated_at?: string;
   last_analysis_at?: string;
 }
 
