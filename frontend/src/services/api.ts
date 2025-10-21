@@ -8,7 +8,8 @@ import {
   ApiResponse,
   FetchGamesResponse,
   AnalyzeGamesResponse,
-  GenerateInsightsResponse
+  GenerateInsightsResponse,
+  Recommendation
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -199,8 +200,8 @@ export const insightsApi = {
     return response.data;
   },
 
-  getRecommendations: async (userId: number): Promise<any> => {
-    const response = await apiClient.get(`/insights/${userId}/recommendations`);
+  getRecommendations: async (userId: number): Promise<Recommendation[]> => {
+    const response = await apiClient.get<Recommendation[]>(`/insights/${userId}/recommendations`);
     return response.data;
   },
 

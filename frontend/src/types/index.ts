@@ -97,6 +97,14 @@ export interface UserInsight {
   recommendations?: Record<string, any>;
 }
 
+// Coaching/Recommendation types
+export interface Recommendation {
+  category: string;
+  priority: 'high' | 'medium' | 'low';
+  description: string;
+  improvement: string;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data?: T;
@@ -106,10 +114,10 @@ export interface ApiResponse<T> {
 
 // Fetch Games Response
 export interface FetchGamesResponse {
-  message: string;
   games_added: number;
-  games_updated: number;
+  existing_games: number;
   total_games: number;
+  message?: string;
 }
 
 // Analyze Games Response
@@ -150,12 +158,7 @@ export interface MoveQualityStats {
   blunders: number;
 }
 
-// Recommendation types
-export interface Recommendation {
-  category: string;
-  priority: 'high' | 'medium' | 'low';
-  description: string;
-}
+// Note: Recommendation interface defined above at line 101-106
 
 // Dashboard types
 export interface DashboardData {
