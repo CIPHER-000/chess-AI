@@ -12,20 +12,59 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
-    # CORS
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        """Validate SECRET_KEY is properly set."""
+        if not v:
+            raise ValueError(
+                "SECRET_KEY environment variable must be set! "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        if v == "dev-secret-key-change-in-production":
+            raise ValueError("Cannot use default SECRET_KEY! Set a secure random key.")
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters long for security.")
+        return v
+    
+    # CORS - Dynamically configured based on environment
+    BACKEND_CORS_ORIGINS: List[str] = []
     
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+    def assemble_cors_origins(cls, v: Union[str, List[str]], info) -> List[str]:
+        """Assemble CORS origins with environment-aware defaults."""
+        values = info.data if info else {}
+        environment = values.get("ENVIRONMENT", "development")
+        
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+            origins = [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            origins = v
+        else:
+            origins = []
+        
+        # Add default development origins if none specified and in dev mode
+        if not origins and environment == "development":
+            origins = [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+            ]
+        
+        # Security check: never allow wildcard in production
+        if environment == "production" and "*" in origins:
+            raise ValueError(
+                "Wildcard CORS origin '*' is not allowed in production! "
+                "Set BACKEND_CORS_ORIGINS environment variable to specific domains."
+            )
+        
+        return origins
     
     # Supabase Configuration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")

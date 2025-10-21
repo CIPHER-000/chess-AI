@@ -23,22 +23,18 @@ app = FastAPI(
     redoc_url=f"{settings.API_V1_STR}/redoc",
 )
 
-# Add CORS middleware - Always allow localhost for development
-# This fixes the OPTIONS 400 Bad Request error
+# Add CORS middleware with environment-aware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "*"  # Allow all origins in development
-    ],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+logger.info(f"CORS enabled for origins: {settings.BACKEND_CORS_ORIGINS}")
 
 # Include API routers
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
@@ -60,17 +56,45 @@ async def root():
 @app.get("/health")
 @app.get("/api/v1/health")
 async def health_check():
-    """Health check endpoint for Render deployment."""
+    """Health check endpoint with database connectivity test."""
+    from .core.database import SessionLocal
+    from sqlalchemy import text
+    import redis
+    
+    health_status = {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "service": "chess-insight-backend",
+        "checks": {}
+    }
+    
+    # Check database connectivity
     try:
-        # Basic health check - could add database connectivity test here
-        return {
-            "status": "healthy", 
-            "version": settings.VERSION,
-            "service": "chess-insight-backend"
-        }
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        health_status["checks"]["database"] = "healthy"
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Service unhealthy")
+        logger.error(f"Database health check failed: {e}")
+        health_status["checks"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Check Redis connectivity
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        redis_client.ping()
+        redis_client.close()
+        health_status["checks"]["redis"] = "healthy"
+    except Exception as e:
+        logger.error(f"Redis health check failed: {e}")
+        health_status["checks"]["redis"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Return 503 if any critical service is down
+    if health_status["status"] == "degraded":
+        raise HTTPException(status_code=503, detail=health_status)
+    
+    return health_status
 
 
 if __name__ == "__main__":
