@@ -15,6 +15,7 @@ export interface User {
   // Chess.com data
   chesscom_profile?: Record<string, any>;
   current_ratings?: Record<string, any>;
+  total_games?: number;  // Total games count from backend (for polling)
   
   // Preferences
   analysis_preferences?: Record<string, any>;
