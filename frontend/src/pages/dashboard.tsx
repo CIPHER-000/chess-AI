@@ -301,7 +301,7 @@ const Dashboard: React.FC = () => {
             <span>{isFetching ? 'Syncing...' : 'Sync Recent Games'}</span>
           </button>
           <button
-            onClick={handleAnalyzeGames}
+            onClick={() => handleAnalyzeGames(false)}
             disabled={isAnalyzing}
             className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-2"
           >
