@@ -202,27 +202,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Mock coaching insights for demo
-  const coachingInsights = [
-    {
-      category: 'Time Management',
-      priority: 'high' as const,
-      description: 'You\'re losing on time in 40% of your games in winning positions.',
-      improvement: 'Practice 10-minute blitz games to improve time management under pressure.'
-    },
-    {
-      category: 'Opening Preparation',
-      priority: 'medium' as const,
-      description: 'Your Sicilian Defense needs work - losing 65% of games with this opening.',
-      improvement: 'Study the main lines of the Najdorf variation and practice tactical patterns.'
-    },
-    {
-      category: 'Endgame Technique',
-      priority: 'low' as const,
-      description: 'Strong endgame performance - converting 85% of winning endgames.',
-      improvement: 'Keep practicing rook endgames to maintain your edge.'
-    }
-  ];
+  // Use real recommendations from API or show placeholder message
+  const coachingInsights = recommendations || [];
 
   if (loading) {
     return (
@@ -266,6 +247,28 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Games Summary */}
+        {userData && (
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400">Total Games Fetched</p>
+                <p className="text-2xl font-bold text-white">{userData.total_games || 0}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400">Games Analyzed</p>
+                <p className="text-2xl font-bold text-white">{analysisSummary?.total_games_analyzed || 0}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-400">Status</p>
+                <p className="text-sm font-medium text-yellow-400">
+                  {analysisSummary?.total_games_analyzed === 0 ? 'Ready for Analysis' : 'Analyzed'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-4 mb-8">
@@ -395,15 +398,27 @@ const Dashboard: React.FC = () => {
             <h3 className="text-xl font-semibold text-white">AI Coach Insights</h3>
           </div>
           <div className="space-y-4">
-            {coachingInsights.map((insight, index) => (
-              <CoachingInsightCard
-                key={index}
-                category={insight.category}
-                priority={insight.priority}
-                description={insight.description}
-                improvement={insight.improvement}
-              />
-            ))}
+            {coachingInsights.length > 0 ? (
+              coachingInsights.map((insight, index) => (
+                <CoachingInsightCard
+                  key={index}
+                  category={insight.category}
+                  priority={insight.priority}
+                  description={insight.description}
+                  improvement={insight.improvement}
+                />
+              ))
+            ) : (
+              <div className="flex items-center justify-center py-12 text-gray-500">
+                <div className="text-center">
+                  <Brain className="w-12 h-12 mx-auto mb-4 text-gray-600" />
+                  <p className="text-lg font-medium text-gray-400 mb-2">No insights available yet</p>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Click <strong>"Analyze with AI"</strong> above to analyze your games and generate personalized coaching insights.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
