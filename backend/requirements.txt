@@ -3,11 +3,10 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
-# Supabase (replaces direct PostgreSQL)
-supabase==2.3.0
-postgrest-py==0.10.6
-# supabase-auth is automatically installed as dependency of supabase
-# Removed explicit version 2.12.4 (doesn't exist - use supabase's dependency)
+# Supabase (latest version - Oct 2025)
+supabase==2.22.0
+# postgrest-py and gotrue are auto-installed as dependencies
+# Removed explicit versions to let supabase manage sub-dependencies
 
 # Database (SQLAlchemy still used for ORM)
 sqlalchemy==2.0.23
@@ -23,7 +22,7 @@ python-chess==1.999
 stockfish==3.28.0
 
 # HTTP requests
-httpx==0.24.1  # Compatible with supabase 2.3.0 (requires <0.25.0)
+httpx==0.25.2  # Compatible with supabase 2.22.0 (requires >=0.24,<0.28)
 requests==2.31.0
 
 # AI Model Providers
