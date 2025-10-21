@@ -13,35 +13,118 @@ interface LoginFormData {
 const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [pollingStatus, setPollingStatus] = useState<string>('');
   const router = useRouter();
   
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
 
+  /**
+   * Poll user data until games are fetched
+   * @param username Chess.com username
+   * @param userId User ID
+   * @param maxAttempts Maximum polling attempts (default: 10)
+   * @param intervalMs Polling interval in milliseconds (default: 3000)
+   */
+  const pollUserData = async (
+    username: string, 
+    userId: number,
+    maxAttempts = 10,
+    intervalMs = 3000
+  ): Promise<void> => {
+    let attempts = 0;
+    
+    const checkUserData = async (): Promise<boolean> => {
+      try {
+        attempts++;
+        setPollingStatus(`Fetching your games... (${attempts}/${maxAttempts})`);
+        
+        const userData = await api.users.getByUsername(username);
+        
+        // Check if games have been fetched (total_games > 0)
+        if (userData.total_games && userData.total_games > 0) {
+          toast.success(`✅ Fetched ${userData.total_games} games! Redirecting...`);
+          setUser(userData);
+          router.push(`/dashboard?userId=${userId}`);
+          return true;
+        }
+        
+        // Continue polling if games not yet fetched
+        if (attempts >= maxAttempts) {
+          toast('⏱️ Still fetching games in background. Redirecting to dashboard...', { 
+            duration: 4000 
+          });
+          router.push(`/dashboard?userId=${userId}`);
+          return true;
+        }
+        
+        return false;
+      } catch (error) {
+        console.error('Polling error:', error);
+        return false;
+      }
+    };
+    
+    // Initial check
+    const immediate = await checkUserData();
+    if (immediate) return;
+    
+    // Set up polling interval
+    const pollInterval = setInterval(async () => {
+      const shouldStop = await checkUserData();
+      if (shouldStop) {
+        clearInterval(pollInterval);
+        setLoading(false);
+        setPollingStatus('');
+      }
+    }, intervalMs);
+    
+    // Timeout after max attempts
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setLoading(false);
+      setPollingStatus('');
+    }, maxAttempts * intervalMs + 1000);
+  };
+
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
+    setPollingStatus('');
+    
     try {
       // Try to find existing user first
       try {
         const existingUser = await api.users.getByUsername(data.chesscom_username);
-        setUser(existingUser);
-        toast.success('Welcome back!');
-        // Redirect to dashboard
-        router.push(`/dashboard?userId=${existingUser.id}`);
+        
+        if (existingUser.total_games && existingUser.total_games > 0) {
+          // User exists and has games
+          setUser(existingUser);
+          toast.success('Welcome back!');
+          router.push(`/dashboard?userId=${existingUser.id}`);
+          setLoading(false);
+        } else {
+          // User exists but no games yet - start polling
+          toast('Fetching your games...', { icon: '⏳' });
+          await pollUserData(data.chesscom_username, existingUser.id);
+        }
       } catch (error) {
         // User doesn't exist, create new one
+        setPollingStatus('Creating account...');
         const newUser = await api.users.create({
           chesscom_username: data.chesscom_username,
           email: data.email
         });
+        
         setUser(newUser);
-        toast.success('Account created successfully!');
-        // Redirect to dashboard
-        router.push(`/dashboard?userId=${newUser.id}`);
+        toast.success('Account created! Fetching your games...', { icon: '🎉' });
+        
+        // Start polling for game data
+        await pollUserData(data.chesscom_username, newUser.id);
       }
     } catch (error: any) {
+      console.error('Submit error:', error);
       toast.error(error.response?.data?.detail || 'Failed to login/create account');
-    } finally {
       setLoading(false);
+      setPollingStatus('');
     }
   };
 
