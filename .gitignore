@@ -270,3 +270,14 @@ uploads/
 reports/
 .pytest_cache/
 htmlcov/
+
+# Temporary scripts (keep in scripts/ folder, but ignore root copies)
+/*.ps1
+!organize-repo.ps1
+
+# Temporary commit helpers
+commit-*.txt
+commit-*.ps1
+
+# IDE specific
+.windsurf/
