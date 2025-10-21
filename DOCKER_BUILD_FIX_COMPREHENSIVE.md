@@ -31,14 +31,14 @@ Should run from: Project root directory
 
 ### **Latest Supabase Version** (via PyPI)
 - **Version**: 2.22.0 (Released: October 8, 2025)
-- **httpx requirement**: `>=0.24,<0.28` ✅
+- **httpx requirement**: `>=0.26,<0.29` ✅
 - **Python**: `>=3.9`
-- **Key change**: Supports httpx 0.25.2!
+- **Key change**: Requires httpx 0.26+!
 
 ### **Dependency Chain**
 ```
 supabase 2.22.0
-  ├── httpx>=0.24,<0.28  ✅ (includes 0.25.2)
+  ├── httpx>=0.26,<0.29  ✅ (requires 0.26+)
   ├── gotrue<3.0,>=1.3   (auto-installed)
   ├── postgrest-py       (auto-installed)
   └── Other dependencies (managed automatically)
@@ -68,16 +68,17 @@ supabase 2.22.0
 - Supports modern httpx versions
 - Better security, bug fixes, features
 
-### **2. Reverted httpx to 0.25.2**
+### **2. Upgraded httpx to 0.27.2**
 ```diff
 # requirements.txt
 
 - httpx==0.24.1  # Compatible with supabase 2.3.0 (requires <0.25.0)
-+ httpx==0.25.2  # Compatible with supabase 2.22.0 (requires >=0.24,<0.28)
+- httpx==0.25.2  # Too old for supabase 2.22.0
++ httpx==0.27.2  # Compatible with supabase 2.22.0 (requires >=0.26,<0.29)
 ```
 
 **Why**:
-- Now compatible with latest supabase
+- Supabase 2.22.0 requires httpx>=0.26
 - More recent version = better security
 - Supports all modern features
 
