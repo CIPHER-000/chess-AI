@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/router';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { TrendingUp, TrendingDown, Trophy, Target, AlertCircle, CheckCircle2, Brain, Clock, Zap } from 'lucide-react';
 import api from '@/services/api';
 import { User, Analysis, MoveQualityStats } from '@/types';
 import toast from 'react-hot-toast';
-
-interface DashboardProps {
-  userId: number;
-}
 
 const MoveQualityChart: React.FC<{ data: MoveQualityStats }> = ({ data }) => {
   const chartData = [
@@ -130,29 +127,31 @@ const CoachingInsightCard: React.FC<{
   );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
+const Dashboard: React.FC = () => {
+  const router = useRouter();
+  const { username } = router.query;
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user data
+  // Fetch user data by username
   const { data: userData, error: userError } = useQuery({
-    queryKey: ['user', userId],
-    queryFn: () => api.users.getById(userId),
-    enabled: !!userId,
+    queryKey: ['user', username],
+    queryFn: () => api.users.getByUsername(username as string),
+    enabled: !!username,
   });
 
   // Fetch analysis summary
   const { data: analysisSummary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['analysis-summary', userId],
-    queryFn: () => api.analysis.getSummary(userId, 7),
-    enabled: !!userId,
+    queryKey: ['analysis-summary', user?.id],
+    queryFn: () => api.analysis.getSummary(user!.id, 7),
+    enabled: !!user?.id,
   });
 
   // Fetch recommendations
   const { data: recommendations } = useQuery({
-    queryKey: ['recommendations', userId],
-    queryFn: () => api.insights.getRecommendations(userId),
-    enabled: !!userId,
+    queryKey: ['recommendations', user?.id],
+    queryFn: () => api.insights.getRecommendations(user!.id),
+    enabled: !!user?.id,
   });
 
   useEffect(() => {
@@ -166,9 +165,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleFetchGames = async () => {
+    if (!user) return;
     setIsFetching(true);
     try {
-      const result = await api.games.fetchRecent(userId, 7);
+      const result = await api.games.fetchRecent(user.id, 7);
       if (result.games_added === 0) {
         toast('No new games found', { icon: 'ℹ️' });
       } else {
@@ -184,9 +184,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
   };
 
   const handleAnalyzeGames = async () => {
+    if (!user) return;
     setIsAnalyzing(true);
     try {
-      const result = await api.analysis.analyzeGames(userId, { days: 7 });
+      const result = await api.analysis.analyzeGames(user.id, { days: 7 });
       if (result.games_queued === 0) {
         toast('No games to analyze', { icon: '🤔' });
       } else {

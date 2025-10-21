@@ -44,7 +44,7 @@ const HomePage: React.FC = () => {
         if (userData.total_games && userData.total_games > 0) {
           toast.success(`✅ Fetched ${userData.total_games} games! Redirecting...`);
           setUser(userData);
-          router.push(`/dashboard?userId=${userId}`);
+          router.push(`/dashboard?username=${username}`);
           return true;
         }
         
@@ -53,7 +53,7 @@ const HomePage: React.FC = () => {
           toast('⏱️ Still fetching games in background. Redirecting to dashboard...', { 
             duration: 4000 
           });
-          router.push(`/dashboard?userId=${userId}`);
+          router.push(`/dashboard?username=${username}`);
           return true;
         }
         
@@ -99,7 +99,7 @@ const HomePage: React.FC = () => {
           // User exists and has games
           setUser(existingUser);
           toast.success('Welcome back!');
-          router.push(`/dashboard?userId=${existingUser.id}`);
+          router.push(`/dashboard?username=${data.chesscom_username}`);
           setLoading(false);
         } else {
           // User exists but no games yet - start polling
