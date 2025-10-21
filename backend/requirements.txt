@@ -6,7 +6,8 @@ python-multipart==0.0.6
 # Supabase (replaces direct PostgreSQL)
 supabase==2.3.0
 postgrest-py==0.10.6
-supabase-auth==2.12.4
+# supabase-auth is automatically installed as dependency of supabase
+# Removed explicit version 2.12.4 (doesn't exist - use supabase's dependency)
 
 # Database (SQLAlchemy still used for ORM)
 sqlalchemy==2.0.23

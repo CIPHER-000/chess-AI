@@ -40,7 +40,8 @@ export const userApi = {
   },
 
   getByUsername: async (username: string): Promise<User> => {
-    const response = await apiClient.get<User>(`/users/by-username/${username}`);
+    // Normalize username to lowercase to match backend storage
+    const response = await apiClient.get<User>(`/users/by-username/${username.toLowerCase()}`);
     return response.data;
   },
 
