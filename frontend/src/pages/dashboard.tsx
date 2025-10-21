@@ -134,7 +134,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Fetch user data by username
-  const { data: userData, error: userError } = useQuery({
+  const { data: userData, error: userError, isLoading: userLoading } = useQuery({
     queryKey: ['user', username],
     queryFn: () => api.users.getByUsername(username as string),
     enabled: !!username,
@@ -155,11 +155,28 @@ const Dashboard: React.FC = () => {
   });
 
   useEffect(() => {
+    // Handle missing username - redirect to home
+    if (!router.isReady) return;
+    
+    if (!username) {
+      toast.error('No username provided. Redirecting to home...');
+      router.push('/');
+      return;
+    }
+    
+    // Handle user data loading states
     if (userData) {
       setUser(userData);
       setLoading(false);
+    } else if (userError) {
+      toast.error('Failed to load user data');
+      setLoading(false);
+      router.push('/');
+    } else if (!userLoading && !userData) {
+      // Query is enabled but no data and not loading = user not found
+      setLoading(false);
     }
-  }, [userData]);
+  }, [userData, userError, userLoading, username, router]);
 
   const [isFetching, setIsFetching] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
