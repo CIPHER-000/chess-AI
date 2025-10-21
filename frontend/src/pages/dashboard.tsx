@@ -183,15 +183,31 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleAnalyzeGames = async () => {
+  const handleAnalyzeGames = async (forceReanalysis = false) => {
     if (!user) return;
     setIsAnalyzing(true);
     try {
-      const result = await api.analysis.analyzeGames(user.id, { days: 7 });
+      const result = await api.analysis.analyzeGames(user.id, { 
+        days: 7,
+        forceReanalysis 
+      });
       if (result.games_queued === 0) {
-        toast('No games to analyze', { icon: '🤔' });
+        // Check if games exist but are already analyzed
+        if (userData?.total_games && userData.total_games > 0) {
+          toast('✅ All games already analyzed! Sync new games to analyze more.', { 
+            icon: '✅',
+            duration: 4000 
+          });
+        } else {
+          toast('No games to analyze. Sync games from Chess.com first!', { 
+            icon: '🤔' 
+          });
+        }
       } else {
-        toast.success(`🧠 Started AI analysis for ${result.games_queued} games!`);
+        const message = forceReanalysis 
+          ? `🔄 Re-analyzing ${result.games_queued} games with fresh analysis!`
+          : `🧠 Started AI analysis for ${result.games_queued} games!`;
+        toast.success(message);
       }
     } catch (error: any) {
       console.error('Error analyzing games:', error);
@@ -296,6 +312,23 @@ const Dashboard: React.FC = () => {
             )}
             <span>{isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}</span>
           </button>
+          
+          {/* Force Reanalyze button - only show if games are analyzed */}
+          {analysisSummary && analysisSummary.total_games_analyzed > 0 && (
+            <button
+              onClick={() => handleAnalyzeGames(true)}
+              disabled={isAnalyzing}
+              className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-2"
+              title="Re-analyze all games (ignores previous analysis)"
+            >
+              {isAnalyzing ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              ) : (
+                <Brain className="w-4 h-4" />
+              )}
+              <span>Force Re-analyze</span>
+            </button>
+          )}
           
           {/* Future OAuth Upgrade Button */}
           {userData && userData.connection_type === 'username_only' && (
