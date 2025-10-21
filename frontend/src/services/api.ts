@@ -5,7 +5,10 @@ import {
   Game, 
   Analysis, 
   UserInsight, 
-  ApiResponse 
+  ApiResponse,
+  FetchGamesResponse,
+  AnalyzeGamesResponse,
+  GenerateInsightsResponse
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -70,8 +73,8 @@ export const userApi = {
 
 // Games API
 export const gamesApi = {
-  fetchRecent: async (userId: number, days = 7, timeClasses?: string[]): Promise<ApiResponse<any>> => {
-    const response = await apiClient.post<ApiResponse<any>>(`/games/${userId}/fetch`, {
+  fetchRecent: async (userId: number, days = 7, timeClasses?: string[]): Promise<FetchGamesResponse> => {
+    const response = await apiClient.post<FetchGamesResponse>(`/games/${userId}/fetch`, {
       days,
       time_classes: timeClasses
     });
@@ -128,8 +131,8 @@ export const analysisApi = {
       timeClasses?: string[];
       forceReanalysis?: boolean;
     }
-  ): Promise<ApiResponse<any>> => {
-    const response = await apiClient.post<ApiResponse<any>>(`/analysis/${userId}/analyze`, {
+  ): Promise<AnalyzeGamesResponse> => {
+    const response = await apiClient.post<AnalyzeGamesResponse>(`/analysis/${userId}/analyze`, {
       game_ids: options?.gameIds,
       days: options?.days || 7,
       time_classes: options?.timeClasses,
@@ -171,8 +174,8 @@ export const insightsApi = {
       periodDays?: number;
       analysisType?: string;
     }
-  ): Promise<ApiResponse<any>> => {
-    const response = await apiClient.post<ApiResponse<any>>(`/insights/${userId}/generate`, {
+  ): Promise<GenerateInsightsResponse> => {
+    const response = await apiClient.post<GenerateInsightsResponse>(`/insights/${userId}/generate`, {
       period_days: options?.periodDays || 7,
       analysis_type: options?.analysisType || 'weekly'
     });

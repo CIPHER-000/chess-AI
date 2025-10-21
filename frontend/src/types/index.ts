@@ -86,6 +86,27 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// Fetch Games Response
+export interface FetchGamesResponse {
+  message: string;
+  games_added: number;
+  games_updated: number;
+  total_games: number;
+}
+
+// Analyze Games Response
+export interface AnalyzeGamesResponse {
+  message: string;
+  games_queued: number;
+}
+
+// Generate Insights Response
+export interface GenerateInsightsResponse {
+  message: string;
+  period_start: string;
+  period_end: string;
+}
+
 // Chart data types
 export interface ChartData {
   name: string;
