@@ -11,6 +11,7 @@ supabase==2.22.0
 # Database (SQLAlchemy still used for ORM)
 sqlalchemy==2.0.23
 alembic==1.13.0
+psycopg2-binary==2.9.9
 asyncpg==0.29.0
 
 # Redis for caching and task queue
