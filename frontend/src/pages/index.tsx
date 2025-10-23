@@ -44,7 +44,7 @@ const HomePage: React.FC = () => {
         if (userData.total_games && userData.total_games > 0) {
           toast.success(`✅ Fetched ${userData.total_games} games! Redirecting...`);
           setUser(userData);
-          router.push(`/dashboard?username=${username}`);
+          router.push(`/dashboard?username=${username.toLowerCase()}`);
           return true;
         }
         
@@ -53,7 +53,7 @@ const HomePage: React.FC = () => {
           toast('⏱️ Still fetching games in background. Redirecting to dashboard...', { 
             duration: 4000 
           });
-          router.push(`/dashboard?username=${username}`);
+          router.push(`/dashboard?username=${username.toLowerCase()}`);
           return true;
         }
         
@@ -93,18 +93,18 @@ const HomePage: React.FC = () => {
     try {
       // Try to find existing user first
       try {
-        const existingUser = await api.users.getByUsername(data.chesscom_username);
+        const existingUser = await api.users.getByUsername(data.chesscom_username.toLowerCase());
         
         if (existingUser.total_games && existingUser.total_games > 0) {
           // User exists and has games
           setUser(existingUser);
           toast.success('Welcome back!');
-          router.push(`/dashboard?username=${data.chesscom_username}`);
+          router.push(`/dashboard?username=${data.chesscom_username.toLowerCase()}`);
           setLoading(false);
         } else {
           // User exists but no games yet - start polling
           toast('Fetching your games...', { icon: '⏳' });
-          await pollUserData(data.chesscom_username, existingUser.id);
+          await pollUserData(data.chesscom_username.toLowerCase(), existingUser.id);
         }
       } catch (error) {
         // User doesn't exist, create new one
@@ -118,7 +118,7 @@ const HomePage: React.FC = () => {
         toast.success('Account created! Fetching your games...', { icon: '🎉' });
         
         // Start polling for game data
-        await pollUserData(data.chesscom_username, newUser.id);
+        await pollUserData(data.chesscom_username.toLowerCase(), newUser.id);
       }
     } catch (error: any) {
       console.error('Submit error:', error);

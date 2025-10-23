@@ -133,11 +133,12 @@ const Dashboard: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user data by username
+  // Fetch user data by username (ensure lowercase for consistency)
+  const normalizedUsername = username ? (username as string).toLowerCase() : '';
   const { data: userData, error: userError, isLoading: userLoading } = useQuery({
-    queryKey: ['user', username],
-    queryFn: () => api.users.getByUsername(username as string),
-    enabled: !!username,
+    queryKey: ['user', normalizedUsername],
+    queryFn: () => api.users.getByUsername(normalizedUsername),
+    enabled: !!normalizedUsername,
   });
 
   // Fetch analysis summary
