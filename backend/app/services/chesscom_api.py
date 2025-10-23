@@ -133,8 +133,31 @@ class ChessComAPI:
                 return None, dict(e.response.headers)
             raise
     
-    async def get_recent_games(self, username: str, days: int = 7) -> List[Dict]:
-        """Get recent games for a player within the specified number of days."""
+    async def get_recent_games(
+        self, 
+        username: str, 
+        days: Optional[int] = None,
+        count: Optional[int] = None
+    ) -> List[Dict]:
+        """Get recent games for a player.
+        
+        Args:
+            username: Chess.com username
+            days: Get games from last N days (mutually exclusive with count)
+            count: Get last N games (mutually exclusive with days)
+        
+        Returns:
+            List of game dictionaries sorted by most recent first
+            
+        Raises:
+            ValueError: If both days and count are specified
+            ChessComAPIError: If API request fails
+        """
+        if days and count:
+            raise ValueError("Specify either 'days' or 'count', not both")
+        
+        if not days and not count:
+            days = 7  # Default to last 7 days
         
         # Get available archives
         archives = await self.get_player_games_archive_list(username)
@@ -145,44 +168,69 @@ class ChessComAPI:
         # Sort archives by date (most recent first)
         archives.sort(reverse=True)
         
-        # Calculate target date
-        target_date = datetime.now(timezone.utc).timestamp() - (days * 24 * 3600)
-        
         all_games = []
         
-        # Fetch games from most recent archives until we have enough
-        for archive_url in archives[:3]:  # Limit to last 3 months
-            try:
-                # Extract year and month from archive URL
-                parts = archive_url.split('/')
-                year, month = int(parts[-2]), int(parts[-1])
-                
-                games_data, _ = await self.get_player_games_by_month(username, year, month)
-                
-                if games_data and "games" in games_data:
-                    games = games_data["games"]
+        if days:
+            # Fetch by date range
+            target_date = datetime.now(timezone.utc).timestamp() - (days * 24 * 3600)
+            
+            for archive_url in archives[:3]:  # Limit to last 3 months
+                try:
+                    # Extract year and month from archive URL
+                    parts = archive_url.split('/')
+                    year, month = int(parts[-2]), int(parts[-1])
                     
-                    # Filter games by date
-                    recent_games = [
-                        game for game in games 
-                        if game.get("end_time", 0) >= target_date
-                    ]
+                    games_data, _ = await self.get_player_games_by_month(username, year, month)
                     
-                    all_games.extend(recent_games)
+                    if games_data and "games" in games_data:
+                        games = games_data["games"]
+                        
+                        # Filter games by date
+                        recent_games = [
+                            game for game in games 
+                            if game.get("end_time", 0) >= target_date
+                        ]
+                        
+                        all_games.extend(recent_games)
+                        
+                        # If we found games older than our target, we can stop
+                        if games and min(game.get("end_time", 0) for game in games) < target_date:
+                            break
+                            
+                except ChessComAPIError as e:
+                    logger.warning(f"Failed to fetch archive {archive_url}: {e}")
+                    continue
+        
+        else:  # count
+            # Fetch by count - get recent games until we have enough
+            for archive_url in archives[:6]:  # Check up to 6 months
+                try:
+                    # Extract year and month from archive URL
+                    parts = archive_url.split('/')
+                    year, month = int(parts[-2]), int(parts[-1])
                     
-                    # If we found games older than our target, we can stop
-                    if games and min(game.get("end_time", 0) for game in games) < target_date:
+                    games_data, _ = await self.get_player_games_by_month(username, year, month)
+                    
+                    if games_data and "games" in games_data:
+                        all_games.extend(games_data["games"])
+                    
+                    # Stop if we have enough games
+                    if len(all_games) >= count:
                         break
                         
-            except ChessComAPIError as e:
-                logger.warning(f"Failed to fetch archive {archive_url}: {e}")
-                continue
+                except ChessComAPIError as e:
+                    logger.warning(f"Failed to fetch archive {archive_url}: {e}")
+                    continue
         
-        # Sort by end_time (most recent first) and limit
+        # Sort by end_time (most recent first)
         all_games.sort(key=lambda x: x.get("end_time", 0), reverse=True)
         
-        # Limit to reasonable number of games
-        return all_games[:settings.MAX_GAMES_PER_ANALYSIS]
+        # Limit based on fetch method
+        if count:
+            return all_games[:count]
+        else:
+            # Limit to reasonable number for date-based fetch
+            return all_games[:settings.MAX_GAMES_PER_ANALYSIS]
     
     async def get_player_current_daily_chess(self, username: str) -> Dict:
         """Get current daily chess games."""

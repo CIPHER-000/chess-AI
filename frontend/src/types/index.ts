@@ -112,12 +112,22 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// Fetch Games Request
+export interface FetchGamesRequest {
+  days?: number;  // Mutually exclusive with count
+  count?: number;  // Mutually exclusive with days
+  time_classes?: string[];
+}
+
 // Fetch Games Response
 export interface FetchGamesResponse {
+  message: string;
   games_added: number;
-  existing_games: number;
+  games_updated: number;
   total_games: number;
-  message?: string;
+  existing_games: number;
+  fetch_method: 'days' | 'count';
+  fetch_value: number;
 }
 
 // Analyze Games Response

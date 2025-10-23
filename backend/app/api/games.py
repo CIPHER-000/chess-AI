@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from ..core.database import get_db
 from ..models import User, Game
@@ -33,8 +33,25 @@ class GameResponse(BaseModel):
 
 
 class GameFetchRequest(BaseModel):
-    days: int = 7
+    """Request model for fetching games from Chess.com."""
+    
+    days: Optional[int] = None  # Fetch games from last N days
+    count: Optional[int] = None  # Fetch last N games
     time_classes: Optional[List[str]] = None  # e.g., ["rapid", "blitz"]
+    
+    @validator('count')
+    def validate_mutually_exclusive(cls, v, values):
+        """Ensure only one of days/count is specified."""
+        if v is not None and values.get('days') is not None:
+            raise ValueError("Specify either 'days' or 'count', not both")
+        return v
+    
+    @validator('days', 'count', pre=True, always=True)
+    def set_default(cls, v, values, field):
+        """Set default to days=10 if neither specified."""
+        if field.name == 'days' and v is None and values.get('count') is None:
+            return 10  # Default to last 10 days
+        return v
 
 
 @router.post("/{user_id}/fetch")
@@ -55,8 +72,13 @@ async def fetch_recent_games(
         # Fetch recent games from Chess.com
         raw_games = await chesscom_api.get_recent_games(
             user.chesscom_username, 
-            days=fetch_request.days
+            days=fetch_request.days,
+            count=fetch_request.count
         )
+        
+        # Determine fetch method used
+        fetch_method = "count" if fetch_request.count else "days"
+        fetch_value = fetch_request.count if fetch_request.count else fetch_request.days
         
         if not raw_games:
             return {"message": "No recent games found", "games_fetched": 0}
@@ -117,11 +139,17 @@ async def fetch_recent_games(
         
         db.commit()
         
+        # Count existing games for this user
+        existing_games_count = db.query(Game).filter(Game.user_id == user.id).count()
+        
         return {
             "message": f"Successfully fetched games",
             "games_added": games_added,
             "games_updated": games_updated,
-            "total_games": games_added + games_updated
+            "total_games": games_added + games_updated,
+            "existing_games": existing_games_count,
+            "fetch_method": fetch_method,
+            "fetch_value": fetch_value
         }
         
     except ChessComAPIError as e:

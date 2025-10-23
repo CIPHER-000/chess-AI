@@ -6,6 +6,7 @@ import {
   Analysis, 
   UserInsight, 
   ApiResponse,
+  FetchGamesRequest,
   FetchGamesResponse,
   AnalyzeGamesResponse,
   GenerateInsightsResponse,
@@ -74,10 +75,11 @@ export const userApi = {
 
 // Games API
 export const gamesApi = {
-  fetchRecent: async (userId: number, days = 7, timeClasses?: string[]): Promise<FetchGamesResponse> => {
+  fetchRecent: async (userId: number, request: FetchGamesRequest): Promise<FetchGamesResponse> => {
     const response = await apiClient.post<FetchGamesResponse>(`/games/${userId}/fetch`, {
-      days,
-      time_classes: timeClasses
+      days: request.days,
+      count: request.count,
+      time_classes: request.time_classes
     });
     return response.data;
   },
