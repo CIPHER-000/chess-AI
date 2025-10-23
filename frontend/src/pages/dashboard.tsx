@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { TrendingUp, TrendingDown, Trophy, Target, AlertCircle, CheckCircle2, Brain, Clock, Zap } from 'lucide-react';
 import api from '@/services/api';
-import { User, Analysis, MoveQualityStats } from '@/types';
+import { User, Analysis, MoveQualityStats, Game } from '@/types';
 import toast from 'react-hot-toast';
 
 const MoveQualityChart: React.FC<{ data: MoveQualityStats }> = ({ data }) => {
@@ -154,6 +154,13 @@ const Dashboard: React.FC = () => {
     enabled: !!user?.id,
   });
 
+  // Fetch games list
+  const { data: games, refetch: refetchGames } = useQuery({
+    queryKey: ['games', user?.id],
+    queryFn: () => api.games.getForUser(user!.id, { limit: 20 }),
+    enabled: !!user?.id,
+  });
+
   useEffect(() => {
     // Handle missing username - redirect to home
     if (!router.isReady) return;
@@ -191,6 +198,8 @@ const Dashboard: React.FC = () => {
       } else {
         const method = result.fetch_method === 'days' ? 'from last 10 days' : 'most recent';
         toast.success(`🎉 Fetched ${result.games_added} new games ${method}!`);
+        // Refetch games list to show newly fetched games
+        refetchGames();
       }
     } catch (error: any) {
       console.error('Error fetching games:', error);
@@ -226,6 +235,10 @@ const Dashboard: React.FC = () => {
           ? `🔄 Re-analyzing ${result.games_queued} games with fresh analysis!`
           : `🧠 Started AI analysis for ${result.games_queued} games!`;
         toast.success(message);
+        // Refetch games list after a delay to show updated analyzed status
+        setTimeout(() => {
+          refetchGames();
+        }, 3000);
       }
     } catch (error: any) {
       console.error('Error analyzing games:', error);
@@ -458,6 +471,67 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Games List */}
+        {games && games.length > 0 && (
+          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-2">
+                <Trophy className="w-6 h-6 text-blue-400" />
+                <h3 className="text-xl font-semibold text-white">Recent Games</h3>
+              </div>
+              <span className="text-sm text-gray-400">{games.length} games</span>
+            </div>
+            <div className="space-y-3">
+              {games.slice(0, 10).map((game) => {
+                const userColor = game.white_username?.toLowerCase() === user?.chesscom_username?.toLowerCase() ? 'white' : 'black';
+                const opponentUsername = userColor === 'white' ? game.black_username : game.white_username;
+                const userResult = userColor === 'white' ? game.white_result : game.black_result;
+                const gameResult = userResult === 'win' ? '🎉 Win' : userResult === 'checkmated' || userResult === 'resigned' || userResult === 'timeout' ? '❌ Loss' : '🤝 Draw';
+                const resultColor = userResult === 'win' ? 'text-green-400' : userResult === 'checkmated' || userResult === 'resigned' || userResult === 'timeout' ? 'text-red-400' : 'text-gray-400';
+                
+                return (
+                  <div key={game.id} className="bg-gray-700/50 p-4 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <span className="text-lg font-medium text-white">vs {opponentUsername}</span>
+                          <span className={`text-sm font-semibold ${resultColor}`}>{gameResult}</span>
+                        </div>
+                        <div className="flex items-center space-x-4 text-sm text-gray-400">
+                          <span>🎮 {game.time_class || 'Unknown'}</span>
+                          <span>📅 {game.end_time ? new Date(game.end_time).toLocaleDateString() : 'N/A'}</span>
+                          <span>🕐 {game.end_time ? new Date(game.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {game.is_analyzed ? (
+                          <span className="px-3 py-1 bg-green-600/20 text-green-400 text-xs font-medium rounded-full border border-green-600/30">
+                            ✓ Analyzed
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-yellow-600/20 text-yellow-400 text-xs font-medium rounded-full border border-yellow-600/30">
+                            ⏳ Not analyzed
+                          </span>
+                        )}
+                        {game.chesscom_url && (
+                          <a
+                            href={game.chesscom_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 text-sm"
+                          >
+                            View →
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Coaching Insights */}
         <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-8">
