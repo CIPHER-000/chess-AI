@@ -3,9 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from ..core.database import get_db
+from ..core.database import get_db, SessionLocal
 from ..models import User, Game, GameAnalysis
-from ..services.chess_analyzer import chess_analyzer
+from ..services.chess_analysis import ChessAnalysisService
+from ..core.config import settings
+from loguru import logger
+import asyncio
 
 router = APIRouter()
 
@@ -45,132 +48,102 @@ class AnalysisRequest(BaseModel):
     force_reanalysis: bool = False  # Re-analyze already analyzed games
 
 
-async def analyze_game_background(game_id: int, db: Session):
-    """Background task to analyze a single game."""
+def analyze_game_background_wrapper(game_id: int, user_id: int):
+    """Wrapper to run async analysis in background task."""
+    asyncio.run(analyze_game_background(game_id, user_id))
+
+
+async def analyze_game_background(game_id: int, user_id: int):
+    """Background task to analyze a single game with Stockfish."""
     
-    # Get the game
-    game = db.query(Game).filter(Game.id == game_id).first()
-    if not game or not game.pgn:
-        return
+    # Create new database session for background task
+    db = SessionLocal()
     
-    # Get user to determine color
-    user = db.query(User).filter(User.id == game.user_id).first()
-    if not user:
-        return
-    
-    # Determine user's color
-    user_color = "white" if game.white_username.lower() == user.chesscom_username else "black"
-    
-    # Run analysis
-    analysis_result = chess_analyzer.analyze_game(
-        game.pgn, 
-        user_color, 
-        str(game.id)
-    )
-    
-    if not analysis_result:
-        return
-    
-    # Check if analysis already exists
-    existing_analysis = db.query(GameAnalysis).filter(GameAnalysis.game_id == game_id).first()
-    
-    if existing_analysis:
-        # Update existing analysis
-        for field, value in analysis_result.__dict__.items():
-            if field not in ['game_id', 'evaluations', 'critical_positions', 'blunder_moves', 
-                           'opening_phase', 'middlegame_phase', 'endgame_phase']:
-                setattr(existing_analysis, field, value)
+    try:
+        logger.info(f"Starting analysis for game {game_id}")
         
-        # Update JSON fields
-        existing_analysis.evaluations = [
-            {
-                'move_number': ev.move_number,
-                'move': ev.move,
-                'evaluation': ev.evaluation,
-                'best_move': ev.best_move,
-                'classification': ev.classification,
-                'evaluation_change': ev.evaluation_change
-            }
-            for ev in analysis_result.evaluations or []
-        ]
+        # Get the game
+        game = db.query(Game).filter(Game.id == game_id).first()
+        if not game or not game.pgn:
+            logger.warning(f"Game {game_id} not found or has no PGN")
+            return
         
-        existing_analysis.critical_positions = [
-            {
-                'move_number': ev.move_number,
-                'move': ev.move,
-                'evaluation_change': ev.evaluation_change
-            }
-            for ev in analysis_result.critical_positions or []
-        ]
+        # Get user to determine color
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning(f"User {user_id} not found")
+            return
         
-        existing_analysis.blunder_moves = [
-            {
-                'move_number': ev.move_number,
-                'move': ev.move,
-                'evaluation_change': ev.evaluation_change
-            }
-            for ev in analysis_result.blunder_moves or []
-        ]
+        # Determine user's color
+        user_color = "white" if game.white_username and game.white_username.lower() == user.chesscom_username else "black"
         
-    else:
-        # Create new analysis
-        analysis = GameAnalysis(
-            game_id=game_id,
-            engine_version=analysis_result.engine_version,
-            analysis_depth=chess_analyzer.analysis_depth,
-            analysis_time=analysis_result.analysis_time,
-            user_color=analysis_result.user_color,
-            user_acpl=analysis_result.user_acpl,
-            opponent_acpl=analysis_result.opponent_acpl,
-            brilliant_moves=analysis_result.brilliant_moves,
-            great_moves=analysis_result.great_moves,
-            best_moves=analysis_result.best_moves,
-            excellent_moves=analysis_result.excellent_moves,
-            good_moves=analysis_result.good_moves,
-            inaccuracies=analysis_result.inaccuracies,
-            mistakes=analysis_result.mistakes,
-            blunders=analysis_result.blunders,
-            opening_acpl=analysis_result.opening_phase.acpl if analysis_result.opening_phase else None,
-            middlegame_acpl=analysis_result.middlegame_phase.acpl if analysis_result.middlegame_phase else None,
-            endgame_acpl=analysis_result.endgame_phase.acpl if analysis_result.endgame_phase else None,
-            opening_name=analysis_result.opening_name,
-            opening_eco=analysis_result.opening_eco,
-            opening_moves=analysis_result.opening_moves,
-            evaluations=[
-                {
-                    'move_number': ev.move_number,
-                    'move': ev.move,
-                    'evaluation': ev.evaluation,
-                    'best_move': ev.best_move,
-                    'classification': ev.classification,
-                    'evaluation_change': ev.evaluation_change
-                }
-                for ev in analysis_result.evaluations or []
-            ],
-            critical_positions=[
-                {
-                    'move_number': ev.move_number,
-                    'move': ev.move,
-                    'evaluation_change': ev.evaluation_change
-                }
-                for ev in analysis_result.critical_positions or []
-            ],
-            blunder_moves=[
-                {
-                    'move_number': ev.move_number,
-                    'move': ev.move,
-                    'evaluation_change': ev.evaluation_change
-                }
-                for ev in analysis_result.blunder_moves or []
-            ]
+        # Initialize analysis service
+        analyzer = ChessAnalysisService(stockfish_path=settings.STOCKFISH_PATH)
+        
+        # Run analysis
+        logger.info(f"Analyzing game {game_id} with Stockfish...")
+        analysis_result = await analyzer.analyze_game(
+            game.pgn,
+            depth=settings.STOCKFISH_DEPTH,
+            time_limit=settings.STOCKFISH_TIME
         )
         
-        db.add(analysis)
-    
-    # Mark game as analyzed
-    game.is_analyzed = True
-    
-    db.commit()
+        if not analysis_result:
+            logger.warning(f"Analysis failed for game {game_id}")
+            return
+        
+        # Check if analysis already exists
+        existing_analysis = db.query(GameAnalysis).filter(GameAnalysis.game_id == game_id).first()
+        
+        if existing_analysis:
+            # Update existing analysis
+            existing_analysis.analysis_depth = settings.STOCKFISH_DEPTH
+            existing_analysis.user_color = user_color
+            existing_analysis.user_acpl = analysis_result["average_centipawn_loss"]
+            existing_analysis.brilliant_moves = analysis_result["move_classifications"]["brilliant"]
+            existing_analysis.great_moves = analysis_result["move_classifications"]["great"]
+            existing_analysis.best_moves = analysis_result["move_classifications"]["best"]
+            existing_analysis.excellent_moves = analysis_result["move_classifications"]["excellent"]
+            existing_analysis.good_moves = analysis_result["move_classifications"]["good"]
+            existing_analysis.inaccuracies = analysis_result["move_classifications"]["inaccuracy"]
+            existing_analysis.mistakes = analysis_result["move_classifications"]["mistake"]
+            existing_analysis.blunders = analysis_result["move_classifications"]["blunder"]
+            existing_analysis.evaluations = analysis_result["moves"]
+            
+            logger.info(f"Updated existing analysis for game {game_id}")
+        else:
+            # Create new analysis
+            analysis = GameAnalysis(
+                game_id=game_id,
+                engine_version="Stockfish",
+                analysis_depth=settings.STOCKFISH_DEPTH,
+                user_color=user_color,
+                user_acpl=analysis_result["average_centipawn_loss"],
+                brilliant_moves=analysis_result["move_classifications"]["brilliant"],
+                great_moves=analysis_result["move_classifications"]["great"],
+                best_moves=analysis_result["move_classifications"]["best"],
+                excellent_moves=analysis_result["move_classifications"]["excellent"],
+                good_moves=analysis_result["move_classifications"]["good"],
+                inaccuracies=analysis_result["move_classifications"]["inaccuracy"],
+                mistakes=analysis_result["move_classifications"]["mistake"],
+                blunders=analysis_result["move_classifications"]["blunder"],
+                evaluations=analysis_result["moves"]
+            )
+            
+            db.add(analysis)
+            logger.info(f"Created new analysis for game {game_id}")
+        
+        # Mark game as analyzed
+        game.is_analyzed = True
+        
+        db.commit()
+        logger.info(f"Successfully completed analysis for game {game_id}")
+        
+    except Exception as e:
+        logger.error(f"Error analyzing game {game_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @router.post("/{user_id}/analyze")
@@ -222,7 +195,7 @@ async def analyze_user_games(
     # Queue analysis tasks
     for game in games_to_analyze:
         if game.pgn:  # Only analyze games with PGN data
-            background_tasks.add_task(analyze_game_background, game.id, db)
+            background_tasks.add_task(analyze_game_background_wrapper, game.id, user_id)
     
     return {
         "message": f"Queued {len(games_to_analyze)} games for analysis",
