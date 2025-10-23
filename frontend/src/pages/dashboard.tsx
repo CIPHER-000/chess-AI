@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, Trophy, Target, AlertCircle, CheckCircle2, Br
 import api from '@/services/api';
 import { User, Analysis, MoveQualityStats, Game } from '@/types';
 import toast from 'react-hot-toast';
+import { AnalysisProgressModal } from '@/components/AnalysisProgressModal';
 
 const MoveQualityChart: React.FC<{ data: MoveQualityStats }> = ({ data }) => {
   const chartData = [
@@ -132,10 +133,13 @@ const Dashboard: React.FC = () => {
   const { username } = router.query;
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analyzingGamesCount, setAnalyzingGamesCount] = useState(0);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Fetch user data by username (ensure lowercase for consistency)
   const normalizedUsername = username ? (username as string).toLowerCase() : '';
-  const { data: userData, error: userError, isLoading: userLoading } = useQuery({
+  const { data: userData, error: userError, isLoading: userLoading, refetch: refetchUserData } = useQuery({
     queryKey: ['user', normalizedUsername],
     queryFn: () => api.users.getByUsername(normalizedUsername),
     enabled: !!normalizedUsername,
@@ -214,11 +218,14 @@ const Dashboard: React.FC = () => {
   const handleAnalyzeGames = async (forceReanalysis = false) => {
     if (!user) return;
     setIsAnalyzing(true);
+    setAnalysisError(null);
+    
     try {
       const result = await api.analysis.analyzeGames(user.id, { 
         days: 7,
         forceReanalysis 
       });
+      
       if (result.games_queued === 0) {
         // Check if games exist but are already analyzed
         if (userData?.total_games && userData.total_games > 0) {
@@ -231,23 +238,89 @@ const Dashboard: React.FC = () => {
             icon: '🤔' 
           });
         }
+        setIsAnalyzing(false);
       } else {
+        // Show modal and start polling
+        setAnalyzingGamesCount(result.games_queued);
+        setShowAnalysisModal(true);
+        
         const message = forceReanalysis 
           ? `🔄 Re-analyzing ${result.games_queued} games with fresh analysis!`
           : `🧠 Started AI analysis for ${result.games_queued} games!`;
-        toast.success(message);
-        // Refetch games list after a delay to show updated analyzed status
-        setTimeout(() => {
-          refetchGames();
-        }, 3000);
+        toast.success(message, { duration: 3000 });
+        
+        // Start polling for completion
+        startAnalysisPolling();
       }
     } catch (error: any) {
       console.error('Error analyzing games:', error);
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to start analysis';
+      setAnalysisError(errorMessage);
       toast.error(`❌ ${errorMessage}`);
-    } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const startAnalysisPolling = () => {
+    let pollCount = 0;
+    const maxPolls = 30; // Poll for max 2.5 minutes
+    
+    const pollInterval = setInterval(async () => {
+      pollCount++;
+      
+      try {
+        // Refetch user data to check if games_analyzed increased
+        const updatedUser = await api.users.getByUsername(normalizedUsername);
+        
+        // Check if all expected games are now analyzed
+        if (updatedUser && games) {
+          const analyzedGames = games.filter(g => g.is_analyzed).length;
+          const newAnalyzedGames = analyzedGames;
+          
+          // If games are being analyzed or polling timeout
+          if (pollCount >= maxPolls || newAnalyzedGames >= analyzingGamesCount) {
+            clearInterval(pollInterval);
+            setIsAnalyzing(false);
+            
+            // Refetch all data
+            await Promise.all([
+              refetchGames(),
+              refetchUserData()
+            ]);
+            
+            toast.success('✅ Analysis complete! Dashboard updated.', {
+              duration: 4000,
+              icon: '🎉'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        // Continue polling despite errors
+      }
+    }, 5000); // Poll every 5 seconds
+    
+    // Cleanup after max time
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      if (isAnalyzing) {
+        setIsAnalyzing(false);
+        refetchGames();
+        refetchUserData();
+      }
+    }, maxPolls * 5000);
+  };
+
+  const handleAnalysisComplete = () => {
+    setShowAnalysisModal(false);
+    setIsAnalyzing(false);
+    // Refetch all data
+    refetchGames();
+    refetchUserData();
+    toast.success('✅ Analysis complete! Your insights have been updated.', {
+      duration: 5000,
+      icon: '🎉'
+    });
   };
 
   // Use real recommendations from API or show placeholder message
@@ -594,6 +667,14 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Analysis Progress Modal */}
+      <AnalysisProgressModal
+        isOpen={showAnalysisModal}
+        onClose={() => setShowAnalysisModal(false)}
+        totalGames={analyzingGamesCount}
+        onComplete={handleAnalysisComplete}
+      />
     </div>
   );
 };

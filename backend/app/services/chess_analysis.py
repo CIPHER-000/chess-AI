@@ -43,7 +43,8 @@ class ChessAnalysisService:
             logger.info(f"Starting game analysis with depth={depth}, time={time_limit}")
             
             # Initialize Stockfish engine
-            engine = await chess.engine.popen_uci(self.stockfish_path)
+            transport, engine = await chess.engine.popen_uci(self.stockfish_path)
+            logger.info("Stockfish engine initialized successfully")
             
             # Parse PGN
             game = chess.pgn.read_game(io.StringIO(pgn_text))
@@ -110,8 +111,6 @@ class ChessAnalysisService:
                         "evaluation": round(cp_after, 2),
                     })
             
-            # Close engine
-            await engine.quit()
             logger.info(f"Analysis complete: {move_count} moves analyzed")
             
             # Calculate overall metrics
@@ -133,6 +132,9 @@ class ChessAnalysisService:
                 "blunder": sum(1 for m in move_data if m["classification"] == "blunder"),
             }
             
+            # Close engine before returning
+            await engine.quit()
+            
             return {
                 "accuracy_percentage": round(accuracy_percentage, 2),
                 "average_centipawn_loss": round(average_cp_loss, 2),
@@ -147,6 +149,12 @@ class ChessAnalysisService:
         except Exception as e:
             logger.error(f"Analysis failed: {e}")
             raise
+        finally:
+            # Ensure engine is always closed
+            try:
+                await engine.quit()
+            except:
+                pass
     
     def _score_to_centipawns(self, score: chess.engine.Score, turn: bool) -> float:
         """
