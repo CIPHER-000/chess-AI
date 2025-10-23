@@ -269,18 +269,17 @@ const Dashboard: React.FC = () => {
       pollCount++;
       
       try {
-        // Refetch user data to check if games_analyzed increased
-        const updatedUser = await api.users.getByUsername(normalizedUsername);
+        // Refetch games to check analysis status
+        const updatedGames = await api.games.getForUser(user!.id, { limit: 20 });
         
-        // Check if all expected games are now analyzed
-        if (updatedUser && games) {
-          const analyzedGames = games.filter(g => g.is_analyzed).length;
-          const newAnalyzedGames = analyzedGames;
+        if (updatedGames) {
+          const analyzedCount = updatedGames.filter(g => g.is_analyzed).length;
           
-          // If games are being analyzed or polling timeout
-          if (pollCount >= maxPolls || newAnalyzedGames >= analyzingGamesCount) {
+          // If analysis is complete or timeout
+          if (pollCount >= maxPolls || analyzedCount >= analyzingGamesCount) {
             clearInterval(pollInterval);
             setIsAnalyzing(false);
+            setShowAnalysisModal(false); // Close modal
             
             // Refetch all data
             await Promise.all([
@@ -305,6 +304,7 @@ const Dashboard: React.FC = () => {
       clearInterval(pollInterval);
       if (isAnalyzing) {
         setIsAnalyzing(false);
+        setShowAnalysisModal(false); // Close modal on timeout
         refetchGames();
         refetchUserData();
       }
@@ -495,7 +495,13 @@ const Dashboard: React.FC = () => {
             />
             <PerformanceCard
               title="Favorite Opening"
-              value={analysisSummary.most_played_openings?.[0]?.[0]?.substring(0, 15) + '...' || 'N/A'}
+              value={
+                analysisSummary.most_played_openings?.[0]?.[0] 
+                  ? (analysisSummary.most_played_openings[0][0].length > 20 
+                      ? analysisSummary.most_played_openings[0][0].substring(0, 20) + '...' 
+                      : analysisSummary.most_played_openings[0][0])
+                  : 'N/A'
+              }
               icon={<Zap className="w-6 h-6" />}
               subtitle="Most played this week"
             />

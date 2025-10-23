@@ -302,7 +302,7 @@ async def get_analysis_summary(user_id: int, days: int = 7, db: Session = Depend
             "endgame_acpl": round(endgame_acpl, 1)
         },
         "most_played_openings": most_played_openings,
-        "accuracy_percentage": round(100 - (total_acpl / 10), 1) if total_acpl > 0 else 100
+        "accuracy_percentage": round(max(0, min(100, 100 - (total_acpl / 10))), 1)
     }
 
 

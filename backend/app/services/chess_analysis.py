@@ -84,9 +84,10 @@ class ChessAnalysisService:
                 score_after = info_after.get("score")
                 
                 if score_before and score_after:
-                    # Convert scores to centipawns from player's perspective
-                    cp_before = self._score_to_centipawns(score_before, position_before.turn)
-                    cp_after = self._score_to_centipawns(score_after, board.turn)
+                    # Convert scores to centipawns from player's perspective (who made the move)
+                    player_turn = position_before.turn
+                    cp_before = self._score_to_centipawns(score_before, player_turn)
+                    cp_after = self._score_to_centipawns(score_after, player_turn)
                     
                     # Centipawn loss (always positive - how much worse the position got)
                     cp_loss = max(0, cp_before - cp_after)
