@@ -150,6 +150,9 @@ const Dashboard: React.FC = () => {
     queryKey: ['analysis-summary', user?.id],
     queryFn: () => api.analysis.getSummary(user!.id, 7),
     enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Don't refetch on component mount
   });
 
   // Fetch recommendations
