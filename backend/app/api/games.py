@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, model_validator
 
 from ..core.database import get_db
 from ..models import User, Game
@@ -39,19 +39,18 @@ class GameFetchRequest(BaseModel):
     count: Optional[int] = None  # Fetch last N games
     time_classes: Optional[List[str]] = None  # e.g., ["rapid", "blitz"]
     
-    @validator('count')
-    def validate_mutually_exclusive(cls, v, values):
-        """Ensure only one of days/count is specified."""
-        if v is not None and values.get('days') is not None:
+    @model_validator(mode='after')
+    def validate_and_set_defaults(self):
+        """Validate mutual exclusivity and set defaults."""
+        # Check mutual exclusivity
+        if self.days is not None and self.count is not None:
             raise ValueError("Specify either 'days' or 'count', not both")
-        return v
-    
-    @validator('days', 'count', pre=True, always=True)
-    def set_default(cls, v, values, field):
-        """Set default to days=10 if neither specified."""
-        if field.name == 'days' and v is None and values.get('count') is None:
-            return 10  # Default to last 10 days
-        return v
+        
+        # Set default to days=10 if neither specified
+        if self.days is None and self.count is None:
+            self.days = 10
+        
+        return self
 
 
 @router.post("/{user_id}/fetch")
