@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from ..core.database import get_db
 from ..models import User, Game
 from ..services.chesscom_api import chesscom_api, ChessComAPIError
+from ..services.tier_service import get_tier_service
 from loguru import logger
 
 router = APIRouter()
@@ -101,7 +102,16 @@ class UserResponse(BaseModel):
     is_active: bool
     current_ratings: Optional[dict] = None
     last_analysis_at: Optional[str] = None
-    total_games: int = 0  # Add game count to response
+    total_games: int = 0
+    analyzed_games: int = 0
+    
+    # Tier management
+    tier: str = "free"
+    ai_analyses_used: int = 0
+    ai_analyses_limit: int = 5
+    is_pro: bool = False
+    can_use_ai_analysis: bool = True
+    remaining_ai_analyses: int = 5
     
     # Authentication status
     connection_type: str = "username_only"
@@ -300,3 +310,50 @@ async def list_users(
     """List all users (for admin purposes)."""
     users = db.query(User).offset(skip).limit(limit).all()
     return users
+
+
+class TierStatusResponse(BaseModel):
+    """Response model for tier status endpoint."""
+    tier: str
+    is_pro: bool
+    can_use_ai: bool
+    ai_analyses_used: int
+    ai_analyses_limit: int
+    remaining_ai_analyses: int
+    trial_exhausted: bool
+    trial_exhausted_at: Optional[str] = None
+    upgrade_message: Optional[str] = None
+
+
+@router.get("/{user_id}/tier-status", response_model=TierStatusResponse)
+async def get_tier_status(user_id: int, db: Session = Depends(get_db)):
+    """Get user's tier status and AI analysis limits."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    tier_service = get_tier_service(db)
+    tier_status = tier_service.get_tier_status(user)
+    upgrade_message = tier_service.get_upgrade_message(user)
+    
+    return {
+        **tier_status,
+        "upgrade_message": upgrade_message
+    }
+
+
+@router.post("/{user_id}/upgrade-to-pro")
+async def upgrade_to_pro(user_id: int, db: Session = Depends(get_db)):
+    """Upgrade user to Pro tier (for testing/admin purposes)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    tier_service = get_tier_service(db)
+    tier_service.upgrade_to_pro(user)
+    
+    return {
+        "message": f"User {user.chesscom_username} upgraded to Pro tier",
+        "tier": user.tier,
+        "unlimited_ai": True
+    }

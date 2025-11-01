@@ -7,6 +7,7 @@ from pydantic import BaseModel, model_validator
 from ..core.database import get_db
 from ..models import User, Game
 from ..services.chesscom_api import chesscom_api, ChessComAPIError
+from ..services.filter_service import GameFilter, FilterService, get_filter_service
 
 router = APIRouter()
 
@@ -35,19 +36,33 @@ class GameResponse(BaseModel):
 class GameFetchRequest(BaseModel):
     """Request model for fetching games from Chess.com."""
     
+    # Legacy fields (kept for backward compatibility)
     days: Optional[int] = None  # Fetch games from last N days
     count: Optional[int] = None  # Fetch last N games
     time_classes: Optional[List[str]] = None  # e.g., ["rapid", "blitz"]
     
+    # New comprehensive filter fields
+    game_count: Optional[int] = None  # Max games to fetch (10, 25, 50, etc.)
+    start_date: Optional[str] = None  # ISO format date
+    end_date: Optional[str] = None  # ISO format date
+    time_controls: Optional[List[str]] = None  # ["bullet", "blitz", "rapid", "daily"]
+    rated_only: Optional[bool] = None
+    unrated_only: Optional[bool] = None
+    
     @model_validator(mode='after')
     def validate_and_set_defaults(self):
         """Validate mutual exclusivity and set defaults."""
-        # Check mutual exclusivity
+        # Check mutual exclusivity of legacy fields
         if self.days is not None and self.count is not None:
             raise ValueError("Specify either 'days' or 'count', not both")
         
-        # Set default to days=10 if neither specified
-        if self.days is None and self.count is None:
+        # Check mutual exclusivity of new fields
+        if self.rated_only and self.unrated_only:
+            raise ValueError("Cannot specify both rated_only and unrated_only")
+        
+        # Set default to days=10 if neither legacy nor new filters specified
+        if (self.days is None and self.count is None and 
+            self.game_count is None and not self.start_date):
             self.days = 10
         
         return self
@@ -69,18 +84,39 @@ async def fetch_recent_games(
     
     try:
         # Fetch recent games from Chess.com
+        # Determine fetch method: use new game_count if provided, otherwise legacy fields
+        fetch_count = fetch_request.game_count or fetch_request.count
+        fetch_days = fetch_request.days
+        
         raw_games = await chesscom_api.get_recent_games(
             user.chesscom_username, 
-            days=fetch_request.days,
-            count=fetch_request.count
+            days=fetch_days,
+            count=fetch_count
         )
         
         # Determine fetch method used
-        fetch_method = "count" if fetch_request.count else "days"
-        fetch_value = fetch_request.count if fetch_request.count else fetch_request.days
+        fetch_method = "count" if fetch_count else "days"
+        fetch_value = fetch_count if fetch_count else fetch_days
         
         if not raw_games:
             return {"message": "No recent games found", "games_fetched": 0}
+        
+        # Apply post-fetch filtering if new filter fields provided
+        if (fetch_request.start_date or fetch_request.end_date or 
+            fetch_request.time_controls or fetch_request.rated_only is not None or 
+            fetch_request.unrated_only is not None):
+            
+            game_filter = GameFilter(
+                game_count=fetch_request.game_count,
+                start_date=datetime.fromisoformat(fetch_request.start_date.replace('Z', '+00:00')) if fetch_request.start_date else None,
+                end_date=datetime.fromisoformat(fetch_request.end_date.replace('Z', '+00:00')) if fetch_request.end_date else None,
+                time_controls=fetch_request.time_controls,
+                rated_only=fetch_request.rated_only,
+                unrated_only=fetch_request.unrated_only
+            )
+            
+            filter_service = get_filter_service()
+            raw_games = filter_service.apply_filters(raw_games, game_filter)
         
         games_added = 0
         games_updated = 0
@@ -89,7 +125,7 @@ async def fetch_recent_games(
             # Parse game data
             game_data = chesscom_api.parse_game_data(raw_game, user.chesscom_username)
             
-            # Filter by time class if specified
+            # Legacy filter by time class if specified
             if fetch_request.time_classes and game_data["time_class"] not in fetch_request.time_classes:
                 continue
             
@@ -138,17 +174,24 @@ async def fetch_recent_games(
         
         db.commit()
         
-        # Count existing games for this user
-        existing_games_count = db.query(Game).filter(Game.user_id == user.id).count()
+        # Update user's total_games count
+        user.total_games = db.query(Game).filter(Game.user_id == user.id).count()
+        db.commit()
         
         return {
             "message": f"Successfully fetched games",
             "games_added": games_added,
             "games_updated": games_updated,
             "total_games": games_added + games_updated,
-            "existing_games": existing_games_count,
+            "existing_games": user.total_games,
             "fetch_method": fetch_method,
-            "fetch_value": fetch_value
+            "fetch_value": fetch_value,
+            "filters_applied": {
+                "game_count": fetch_request.game_count,
+                "date_range": bool(fetch_request.start_date or fetch_request.end_date),
+                "time_controls": fetch_request.time_controls,
+                "rated_filter": fetch_request.rated_only or fetch_request.unrated_only
+            }
         }
         
     except ChessComAPIError as e:

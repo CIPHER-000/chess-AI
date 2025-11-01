@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from ..core.database import get_db, SessionLocal
 from ..models import User, Game, GameAnalysis
 from ..services.chess_analysis import ChessAnalysisService
+from ..services.tier_service import get_tier_service
 from ..core.config import settings
 from loguru import logger
 import asyncio
@@ -46,6 +47,7 @@ class AnalysisRequest(BaseModel):
     days: int = 7  # Analyze games from last N days
     time_classes: Optional[List[str]] = None  # Filter by time classes
     force_reanalysis: bool = False  # Re-analyze already analyzed games
+    mode: str = "auto"  # "auto", "stockfish-only", or "ai-enhanced"
 
 
 def analyze_game_background_wrapper(game_id: int, user_id: int):
@@ -153,12 +155,41 @@ async def analyze_user_games(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Analyze games for a user."""
+    """Analyze games for a user with tier-aware logic."""
     
     # Verify user exists
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check tier status
+    tier_service = get_tier_service(db)
+    
+    # Determine analysis mode based on tier and request
+    analysis_mode = request.mode
+    uses_ai = False
+    
+    if analysis_mode == "auto":
+        # Auto mode: use AI if user can, otherwise Stockfish-only
+        if tier_service.can_use_ai_analysis(user):
+            analysis_mode = "ai-enhanced"
+            uses_ai = True
+        else:
+            analysis_mode = "stockfish-only"
+    elif analysis_mode == "ai-enhanced":
+        # Explicit AI request: check if user has access
+        if not tier_service.can_use_ai_analysis(user):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "AI analysis limit reached",
+                    "message": tier_service.get_upgrade_message(user),
+                    "tier": user.tier,
+                    "remaining_analyses": user.remaining_ai_analyses,
+                    "upgrade_required": True
+                }
+            )
+        uses_ai = True
     
     # Build query for games to analyze
     if request.game_ids:
@@ -192,14 +223,35 @@ async def analyze_user_games(
             "games_queued": 0
         }
     
+    # Increment AI usage if using AI-enhanced mode
+    if uses_ai:
+        if not tier_service.increment_ai_usage(user):
+            raise HTTPException(
+                status_code=403,
+                detail="AI analysis limit reached"
+            )
+    
     # Queue analysis tasks
     for game in games_to_analyze:
         if game.pgn:  # Only analyze games with PGN data
             background_tasks.add_task(analyze_game_background_wrapper, game.id, user_id)
     
+    # Update user's analyzed_games count
+    user.analyzed_games = db.query(Game).filter(
+        Game.user_id == user_id,
+        Game.is_analyzed == True
+    ).count() + len(games_to_analyze)
+    db.commit()
+    
     return {
         "message": f"Queued {len(games_to_analyze)} games for analysis",
-        "games_queued": len(games_to_analyze)
+        "games_queued": len(games_to_analyze),
+        "analysis_mode": analysis_mode,
+        "uses_ai": uses_ai,
+        "tier_info": {
+            "tier": user.tier,
+            "remaining_ai_analyses": user.remaining_ai_analyses if not user.is_pro else "unlimited"
+        }
     }
 
 
@@ -291,6 +343,10 @@ async def get_analysis_summary(user_id: int, days: int = 7, db: Session = Depend
     
     most_played_openings = sorted(opening_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     
+    # Get tier info
+    tier_service = get_tier_service(db)
+    tier_status = tier_service.get_tier_status(user)
+    
     return {
         "period_days": days,
         "total_games_analyzed": total_games,
@@ -302,7 +358,9 @@ async def get_analysis_summary(user_id: int, days: int = 7, db: Session = Depend
             "endgame_acpl": round(endgame_acpl, 1)
         },
         "most_played_openings": most_played_openings,
-        "accuracy_percentage": round(max(0, min(100, 100 - (total_acpl / 10))), 1)
+        "accuracy_percentage": round(max(0, min(100, 100 - (total_acpl / 10))), 1),
+        "tier_status": tier_status,
+        "analysis_note": "Stockfish metrics only" if not tier_status["can_use_ai"] and user.tier == "free" else "Full AI insights"
     }
 
 
