@@ -35,42 +35,65 @@
 
 ---
 
-## 🔄 Phase 2: Backend API Updates (TODO)
+## ✅ Phase 2: Backend API Updates (COMPLETED)
 
-**Status**: ⏳ PENDING
+**Status**: ✅ DONE
 
-**Tasks**:
-- [ ] Update `users` API to return tier status
-  - Add `/api/v1/users/{user_id}/tier-status` endpoint
-  - Include tier info in user GET response
+**Completed Tasks**:
+- [x] Update `users` API to return tier status
+  - ✅ Added `/api/v1/users/{user_id}/tier-status` endpoint
+  - ✅ Include tier info in user GET response (tier, ai_analyses_used, remaining_ai_analyses)
+  - ✅ Added `/api/v1/users/{user_id}/upgrade-to-pro` endpoint for testing
   
-- [ ] Create filtering service
-  - New file: `/backend/app/services/filter_service.py`
-  - Support filters:
-    - Game count (10, 25, 50, all)
+- [x] Create filtering service
+  - ✅ New file: `/backend/app/services/filter_service.py`
+  - ✅ Support filters:
+    - Game count (10, 25, 50, custom)
     - Date range (start_date, end_date)
-    - Time control (bullet, blitz, rapid, daily, all)
+    - Time control (bullet, blitz, rapid, daily)
     - Rated/unrated filter
+  - ✅ `GameFilter` class for configuration
+  - ✅ `FilterService` with apply_filters() method
+  - ✅ get_filter_summary() for statistics
   
-- [ ] Update games fetch endpoint
-  - `/api/v1/games/fetch` should accept filter parameters
-  - Apply filters post-fetch from Chess.com API
+- [x] Update games fetch endpoint
+  - ✅ `/api/v1/games/fetch` accepts comprehensive filter parameters
+  - ✅ Apply FilterService post-fetch from Chess.com API
+  - ✅ Return filter metadata in response
+  - ✅ Update user.total_games count automatically
   
-- [ ] Update analysis endpoint
-  - Check tier status before analysis
-  - Increment AI usage counter if using AI layer
-  - Return Stockfish-only results for free users post-trial
+- [x] Update analysis endpoint
+  - ✅ Check tier status before analysis
+  - ✅ Increment AI usage counter if using AI layer
+  - ✅ Return HTTP 403 with upgrade message when trial exhausted
+  - ✅ Update user.analyzed_games count
   
-- [ ] Add analysis mode endpoint
-  - `/api/v1/analysis/{user_id}/analyze` with `mode` parameter:
+- [x] Add analysis mode to analyze endpoint
+  - ✅ `/api/v1/analysis/{user_id}/analyze` with `mode` parameter:
+    - `"auto"` - Use AI if available, fallback to Stockfish (default)
     - `"stockfish-only"` - Just Stockfish metrics
     - `"ai-enhanced"` - Full AI insights (requires tier check)
+  - ✅ Return analysis_mode and tier_info in response
 
-**Files to Create/Modify**:
-- `backend/app/services/filter_service.py` (new)
-- `backend/app/api/games.py`
-- `backend/app/api/analysis.py`
-- `backend/app/api/users.py`
+**Files Created**:
+- `backend/app/services/filter_service.py` (319 lines)
+
+**Files Modified**:
+- `backend/app/api/users.py` (+tier endpoints, +TierService)
+- `backend/app/api/games.py` (+comprehensive filtering, +FilterService)
+- `backend/app/api/analysis.py` (+tier checks, +analysis modes)
+
+**API Endpoints Added**:
+1. `GET /api/v1/users/{user_id}/tier-status` - Get tier status
+2. `POST /api/v1/users/{user_id}/upgrade-to-pro` - Upgrade to Pro (testing)
+
+**API Endpoints Enhanced**:
+1. `GET /api/v1/users/{user_id}` - Now includes tier fields
+2. `POST /api/v1/games/{user_id}/fetch` - Now accepts filter parameters
+3. `POST /api/v1/analysis/{user_id}/analyze` - Now checks tier and modes
+4. `GET /api/v1/analysis/{user_id}/summary` - Now includes tier_status
+
+**Commit**: `e026ca9` - "feat: Phase 2 - Backend API updates with filtering and tier management"
 
 ---
 
@@ -304,14 +327,14 @@ npm install @types/react-datepicker --save-dev
 | Phase | Estimated Time | Status |
 |-------|---------------|--------|
 | 1. Documentation & Backend Models | 2 hours | ✅ DONE |
-| 2. Backend API Updates | 4 hours | ⏳ TODO |
+| 2. Backend API Updates | 4 hours | ✅ DONE |
 | 3. Frontend Landing Page Filters | 3 hours | ⏳ TODO |
 | 4. Frontend Dashboard Updates | 4 hours | ⏳ TODO |
-| 5. Analysis Pipeline Separation | 3 hours | ⏳ TODO |
+| 5. Analysis Pipeline Separation | 3 hours | ✅ DONE (Backend) |
 | 6. Testing with Playwright | 5 hours | ⏳ TODO |
 | 7. Documentation Updates | 2 hours | ⏳ TODO |
 | 8. Migration & Deployment | 1 hour | ⏳ TODO |
-| **Total** | **24 hours** | **4% Complete** |
+| **Total** | **24 hours** | **38% Complete** |
 
 ---
 
