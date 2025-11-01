@@ -30,6 +30,16 @@ class User(Base):
     analysis_preferences = Column(JSON, default={})
     notification_preferences = Column(JSON, default={})
     
+    # Subscription tier management
+    tier = Column(String, default="free")  # "free" or "pro"
+    ai_analyses_used = Column(Integer, default=0)
+    ai_analyses_limit = Column(Integer, default=5)  # Free tier gets 5 AI analyses
+    trial_exhausted_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Game statistics
+    total_games = Column(Integer, default=0)
+    analyzed_games = Column(Integer, default=0)
+    
     # Metadata
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -62,5 +72,33 @@ class User(Base):
         """Check if user can access private Chess.com data."""
         return self.is_authenticated
     
+    @property
+    def is_pro(self) -> bool:
+        """Check if user has Pro subscription."""
+        return self.tier == "pro"
+    
+    @property
+    def can_use_ai_analysis(self) -> bool:
+        """Check if user can use AI-powered analysis."""
+        if self.is_pro:
+            return True
+        # Free users get limited AI analyses
+        return self.ai_analyses_used < self.ai_analyses_limit
+    
+    @property
+    def remaining_ai_analyses(self) -> int:
+        """Get remaining AI analysis count for free users."""
+        if self.is_pro:
+            return -1  # Unlimited
+        return max(0, self.ai_analyses_limit - self.ai_analyses_used)
+    
+    def increment_ai_usage(self):
+        """Increment AI analysis usage counter."""
+        if not self.is_pro:
+            self.ai_analyses_used += 1
+            if self.ai_analyses_used >= self.ai_analyses_limit and not self.trial_exhausted_at:
+                from datetime import datetime, timezone
+                self.trial_exhausted_at = datetime.now(timezone.utc)
+    
     def __repr__(self):
-        return f"<User(username='{self.chesscom_username}', connection='{self.connection_type}')>"
+        return f"<User(username='{self.chesscom_username}', tier='{self.tier}', connection='{self.connection_type}')>"
