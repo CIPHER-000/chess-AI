@@ -16,6 +16,15 @@ export interface User {
   chesscom_profile?: Record<string, any>;
   current_ratings?: Record<string, any>;
   total_games?: number;  // Total games count from backend (for polling)
+  analyzed_games?: number;  // Analyzed games count
+  
+  // Tier management
+  tier?: string;  // "free" | "pro"
+  ai_analyses_used?: number;
+  ai_analyses_limit?: number;
+  is_pro?: boolean;
+  can_use_ai_analysis?: boolean;
+  remaining_ai_analyses?: number;
   
   // Preferences
   analysis_preferences?: Record<string, any>;
@@ -114,9 +123,40 @@ export interface ApiResponse<T> {
 
 // Fetch Games Request
 export interface FetchGamesRequest {
+  // Legacy fields (backward compatible)
   days?: number;  // Mutually exclusive with count
   count?: number;  // Mutually exclusive with days
   time_classes?: string[];
+  
+  // New comprehensive filter fields
+  game_count?: number;  // Max games to fetch (10, 25, 50, etc.)
+  start_date?: string;  // ISO format date
+  end_date?: string;  // ISO format date
+  time_controls?: string[];  // ["bullet", "blitz", "rapid", "daily"]
+  rated_only?: boolean;
+  unrated_only?: boolean;
+}
+
+// Game Filter Options (for UI)
+export interface GameFilterOptions {
+  game_count?: number;
+  start_date?: Date | null;
+  end_date?: Date | null;
+  time_controls: string[];
+  rated_filter?: 'all' | 'rated' | 'unrated';
+}
+
+// Tier Status
+export interface TierStatus {
+  tier: string;
+  is_pro: boolean;
+  can_use_ai: boolean;
+  ai_analyses_used: number;
+  ai_analyses_limit: number;
+  remaining_ai_analyses: number;
+  trial_exhausted: boolean;
+  trial_exhausted_at?: string | null;
+  upgrade_message?: string | null;
 }
 
 // Fetch Games Response
@@ -128,12 +168,24 @@ export interface FetchGamesResponse {
   existing_games: number;
   fetch_method: 'days' | 'count';
   fetch_value: number;
+  filters_applied?: {
+    game_count?: number | null;
+    date_range?: boolean;
+    time_controls?: string[] | null;
+    rated_filter?: boolean | null;
+  };
 }
 
 // Analyze Games Response
 export interface AnalyzeGamesResponse {
   message: string;
   games_queued: number;
+  analysis_mode?: string;
+  uses_ai?: boolean;
+  tier_info?: {
+    tier: string;
+    remaining_ai_analyses: number | string;
+  };
 }
 
 // Generate Insights Response
