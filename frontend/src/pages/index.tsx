@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/router';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
-import { User, UserCreate } from '@/types';
+import { User, UserCreate, GameFilterOptions } from '@/types';
 
 interface LoginFormData {
   chesscom_username: string;
@@ -14,8 +14,18 @@ const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [pollingStatus, setPollingStatus] = useState<string>('');
-  const router = useRouter();
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
+  // Filter state
+  const [filters, setFilters] = useState<GameFilterOptions>({
+    game_count: 25,
+    start_date: null,
+    end_date: null,
+    time_controls: [],
+    rated_filter: 'all'
+  });
+  
+  const router = useRouter();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
 
   /**
@@ -92,34 +102,61 @@ const HomePage: React.FC = () => {
     
     try {
       // Try to find existing user first
+      let user: User;
       try {
-        const existingUser = await api.users.getByUsername(data.chesscom_username.toLowerCase());
-        
-        if (existingUser.total_games && existingUser.total_games > 0) {
-          // User exists and has games
-          setUser(existingUser);
-          toast.success('Welcome back!');
-          router.push(`/dashboard?username=${data.chesscom_username.toLowerCase()}`);
-          setLoading(false);
-        } else {
-          // User exists but no games yet - start polling
-          toast('Fetching your games...', { icon: '⏳' });
-          await pollUserData(data.chesscom_username.toLowerCase(), existingUser.id);
-        }
+        user = await api.users.getByUsername(data.chesscom_username.toLowerCase());
+        toast.success('Welcome back!');
       } catch (error) {
         // User doesn't exist, create new one
         setPollingStatus('Creating account...');
-        const newUser = await api.users.create({
+        user = await api.users.create({
           chesscom_username: data.chesscom_username,
           email: data.email
         });
-        
-        setUser(newUser);
-        toast.success('Account created! Fetching your games...', { icon: '🎉' });
-        
-        // Start polling for game data
-        await pollUserData(data.chesscom_username.toLowerCase(), newUser.id);
+        toast.success('Account created!', { icon: '🎉' });
       }
+
+      // Fetch games with filters
+      setPollingStatus('Fetching your games...');
+      try {
+        const fetchRequest: any = {
+          game_count: filters.game_count,
+        };
+
+        // Add optional filters
+        if (filters.time_controls.length > 0) {
+          fetchRequest.time_controls = filters.time_controls;
+        }
+        if (filters.rated_filter === 'rated') {
+          fetchRequest.rated_only = true;
+        } else if (filters.rated_filter === 'unrated') {
+          fetchRequest.unrated_only = true;
+        }
+        if (filters.start_date) {
+          fetchRequest.start_date = filters.start_date.toISOString();
+        }
+        if (filters.end_date) {
+          fetchRequest.end_date = filters.end_date.toISOString();
+        }
+
+        const fetchResponse = await api.games.fetchRecent(user.id, fetchRequest);
+        
+        toast.success(`✅ Fetched ${fetchResponse.games_added} games!`);
+        setUser(user);
+        
+        // Redirect to dashboard
+        setTimeout(() => {
+          router.push(`/dashboard?username=${data.chesscom_username.toLowerCase()}`);
+        }, 1000);
+      } catch (fetchError: any) {
+        console.error('Game fetch error:', fetchError);
+        toast.error('Failed to fetch games. Redirecting to dashboard...');
+        setTimeout(() => {
+          router.push(`/dashboard?username=${data.chesscom_username.toLowerCase()}`);
+        }, 2000);
+      }
+      
+      setLoading(false);
     } catch (error: any) {
       console.error('Submit error:', error);
       toast.error(error.response?.data?.detail || 'Failed to login/create account');
@@ -183,6 +220,132 @@ const HomePage: React.FC = () => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="your@email.com"
               />
+            </div>
+
+            {/* Game Filters Section */}
+            <div className="border-t border-gray-700 pt-6">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="w-full flex items-center justify-between text-left mb-4"
+              >
+                <div>
+                  <h3 className="text-sm font-medium text-gray-200">Game Filters</h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {showAdvancedFilters ? 'Hide' : 'Show'} advanced filtering options
+                  </p>
+                </div>
+                <svg 
+                  className={`w-5 h-5 text-gray-400 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showAdvancedFilters && (
+                <div className="space-y-4 mb-4 animate-in slide-in-from-top">
+                  {/* Game Count */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-2">
+                      Number of Games
+                    </label>
+                    <select
+                      value={filters.game_count}
+                      onChange={(e) => setFilters({...filters, game_count: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={10}>10 games</option>
+                      <option value={25}>25 games</option>
+                      <option value={50}>50 games</option>
+                      <option value={100}>100 games</option>
+                    </select>
+                  </div>
+
+                  {/* Time Controls */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-2">
+                      Time Controls
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['bullet', 'blitz', 'rapid', 'daily'].map((tc) => (
+                        <label key={tc} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filters.time_controls.includes(tc)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFilters({...filters, time_controls: [...filters.time_controls, tc]});
+                              } else {
+                                setFilters({...filters, time_controls: filters.time_controls.filter(t => t !== tc)});
+                              }
+                            }}
+                            className="w-4 h-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-300 capitalize">{tc}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Rated Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-2">
+                      Game Type
+                    </label>
+                    <select
+                      value={filters.rated_filter}
+                      onChange={(e) => setFilters({...filters, rated_filter: e.target.value as 'all' | 'rated' | 'unrated'})}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="all">All Games</option>
+                      <option value="rated">Rated Only</option>
+                      <option value="unrated">Unrated Only</option>
+                    </select>
+                  </div>
+
+                  {/* Date Range */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-200 mb-2">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={filters.start_date ? filters.start_date.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setFilters({...filters, start_date: e.target.value ? new Date(e.target.value) : null})}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-200 mb-2">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={filters.end_date ? filters.end_date.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setFilters({...filters, end_date: e.target.value ? new Date(e.target.value) : null})}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Filter Summary */}
+                  <div className="p-3 bg-gray-700/50 rounded-lg">
+                    <p className="text-xs text-gray-400">
+                      Will fetch: <span className="text-white font-medium">{filters.game_count} games</span>
+                      {filters.time_controls.length > 0 && (
+                        <>, <span className="text-white font-medium">{filters.time_controls.join(', ')}</span> only</>
+                      )}
+                      {filters.rated_filter !== 'all' && (
+                        <>, <span className="text-white font-medium">{filters.rated_filter}</span> games</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button

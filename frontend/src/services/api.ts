@@ -71,15 +71,33 @@ export const userApi = {
     });
     return response.data;
   },
+
+  getTierStatus: async (userId: number): Promise<any> => {
+    const response = await apiClient.get(`/users/${userId}/tier-status`);
+    return response.data;
+  },
+
+  upgradeToPro: async (userId: number): Promise<User> => {
+    const response = await apiClient.post<User>(`/users/${userId}/upgrade-to-pro`);
+    return response.data;
+  },
 };
 
 // Games API
 export const gamesApi = {
   fetchRecent: async (userId: number, request: FetchGamesRequest): Promise<FetchGamesResponse> => {
     const response = await apiClient.post<FetchGamesResponse>(`/games/${userId}/fetch`, {
+      // Legacy fields
       days: request.days,
       count: request.count,
-      time_classes: request.time_classes
+      time_classes: request.time_classes,
+      // New comprehensive filter fields
+      game_count: request.game_count,
+      start_date: request.start_date,
+      end_date: request.end_date,
+      time_controls: request.time_controls,
+      rated_only: request.rated_only,
+      unrated_only: request.unrated_only
     });
     return response.data;
   },
